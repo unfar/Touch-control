@@ -27,7 +27,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build APK
-        run: gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          echo "=== Looking for APKs ==="
+          find . -name "*.apk" -type f 2>/dev/null
+          echo "=== Build output dir ==="
+          ls -la app/build/outputs/ 2>/dev/null || echo "No outputs dir"
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
@@ -36,7 +41,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TouchControl-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/**/*.apk
+            **/build/outputs/apk/**/*.apk
 
       - name: Upload Build Log
         if: failure()

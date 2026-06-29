@@ -21,18 +21,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Gradle
+      - name: Install Gradle & Build
+        shell: bash
         run: |
-          GRADLE_VERSION=8.7
-          curl -sL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /opt
-          echo "/opt/gradle-${GRADLE_VERSION}/bin" >> $GITHUB_PATH
-
-      - name: Generate Wrapper
-        run: gradle wrapper --gradle-version=8.7
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+          set -e  # exit on error
+          echo "=== Downloading Gradle 8.7 ==="
+          curl -sL --retry 3 "https://services.gradle.org/distributions/gradle-8.7-bin.zip" -o /tmp/gradle.zip
+          echo "=== Extracting ==="
+          unzip -q /tmp/gradle.zip -d /tmp/
+          GRADLE_HOME=/tmp/gradle-8.7
+          echo "=== Generating Wrapper ==="
+          $GRADLE_HOME/bin/gradle wrapper --gradle-version=8.7
+          echo "=== Building APK ==="
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

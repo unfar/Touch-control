@@ -12,7 +12,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -20,22 +21,64 @@ jobs:
           distribution: 'zulu'
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Build with Gradle
-        uses: gradle/actions/setup-gradle@v4
-
       - name: Build APK
         run: |
-          gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
-          echo "=== Looking for APKs ==="
-          find . -name "*.apk" -type f 2>/dev/null
-          echo "=== Build output dir ==="
-          ls -la app/build/outputs/ 2>/dev/null || echo "No outputs dir"
-          find app/build -name "*.apk" 2>/dev/null || echo "No APK found"
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          set -euo pipefail
+          
+          echo "::group::1. Install Gradle"
+          curl -sL --retry 3 "https://services.gradle.org/distributions/gradle-8.7-bin.zip" -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt/
+          GRADLE_HOME=/opt/gradle-8.7
+          export PATH="$GRADLE_HOME/bin:$PATH"
+          gradle --version | head -2
+          echo "::endgroup::"
+          
+          echo "::group::2. Setup Android SDK"
+          # Android SDK is pre-installed on ubuntu-latest GitHub runners
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls $ANDROID_HOME/ 2>/dev/null | head -5 || echo "No SDK at default path"
+          
+          # Check if cmdline-tools exist
+          CMDLINE="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -f "$CMDLINE" ]; then
+            # Download cmdline-tools
+            echo "Downloading cmdline-tools..."
+            curl -sL --retry 3 "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o /tmp/cmdline.zip
+            unzip -q /tmp/cmdline.zip -d /tmp/cmdline/
+            mkdir -p $ANDROID_HOME/cmdline-tools
+            mv /tmp/cmdline/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+            CMDLINE="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          
+          # Install required SDK platforms
+          yes | $CMDLINE --licenses > /dev/null 2>&1 || true
+          $CMDLINE "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
+          echo "::endgroup::"
+          
+          echo "::group::3. Generate Gradle Wrapper"
+          cd $GITHUB_WORKSPACE
+          gradle wrapper --gradle-version=8.7
+          echo "::endgroup::"
+          
+          echo "::group::4. List project structure"
+          ls -la
+          echo "---"
+          ls app/build.gradle.kts 2>/dev/null && echo "app/build.gradle.kts ✓" || echo "app/build.gradle.kts ✗"
+          ls settings.gradle.kts 2>/dev/null && echo "settings.gradle.kts ✓" || echo "settings.gradle.kts ✗"
+          echo "::endgroup::"
+          
+          echo "::group::5. Build APK"
+          export ANDROID_HOME ANDROID_SDK_ROOT
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1
+          echo "::endgroup::"
+          
+          echo "::group::6. Find APK"
+          find $GITHUB_WORKSPACE -name "*.apk" -type f 2>/dev/null
+          echo "---"
+          ls -la app/build/outputs/ 2>/dev/null || echo "No outputs"
+          echo "::endgroup::"
 
       - name: Upload APK
         if: success()
@@ -43,12 +86,5 @@ jobs:
         with:
           name: TouchControl-APK
           path: |
-            app/build/outputs/apk/**/*.apk
-            **/build/outputs/apk/**/*.apk
-
-      - name: Upload Build Log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
+            **/*.apk
+          if-no-files-found: warn

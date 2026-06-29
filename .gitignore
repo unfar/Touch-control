@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.iws
+.DS_Store
+
+# Android
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+venv/
+.venv/
+
+# Misc
+*.log
+*.tmp

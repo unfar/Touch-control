@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TouchControl</string>
+    <string name="touchpad">触摸板</string>
+    <string name="keyboard">键盘</string>
+    <string name="settings">设置</string>
+    <string name="connect">连接</string>
+    <string name="disconnect">断开</string>
+    <string name="connected">已连接</string>
+    <string name="disconnected">未连接</string>
+    <string name="connecting">连接中…</string>
+    <string name="ip_address">IP 地址</string>
+    <string name="port">端口</string>
+    <string name="default_port_hint">默认 9090</string>
+    <string name="auto_discovery">自动发现</string>
+    <string name="no_server_found">未发现服务器</string>
+    <string name="scanning">正在扫描…</string>
+    <string name="retry_connect">重连</string>
+    <string name="swipe_scroll_hint">双指滑动 = 滚动</string>
+    <string name="right_click_hint">双指点击 = 右键</string>
+    <string name="left_click_hint">单指点击 = 左键</string>
+
+    <!-- 无障碍服务 -->
+    <string name="accessibility_service_desc">通过 TouchControl 手机端远程控制此平板的触摸操作</string>
+</resources>

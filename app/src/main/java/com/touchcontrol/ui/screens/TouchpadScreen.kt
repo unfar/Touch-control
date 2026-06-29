@@ -1,0 +1,349 @@
+package com.touchcontrol.ui.screens
+
+import android.view.MotionEvent
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.touchcontrol.gesture.TouchpadEngine
+import com.touchcontrol.network.ConnectionState
+import kotlin.math.abs
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun TouchpadScreen(
+    connectionState: ConnectionState,
+    cursorSpeed: Float,
+    scrollSpeed: Float,
+    onSendMessage: (Any) -> Boolean,
+    onNavigateToConnection: () -> Unit,
+) {
+    val isConnected = connectionState is ConnectionState.Connected
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .systemBarsPadding()
+    ) {
+        // 顶部栏
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+            tonalElevation = 0.dp,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                // 连接状态
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val statusColor = when (connectionState) {
+                        is ConnectionState.Connected -> Color(0xFF00D68F)
+                        is ConnectionState.Connecting -> Color(0xFFFFB347)
+                        else -> Color(0xFF666680)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                    Text(
+                        text = when (connectionState) {
+                            is ConnectionState.Connected -> "${connectionState.host}"
+                            is ConnectionState.Connecting -> "连接中"
+                            else -> "未连接"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // 连接按钮
+                if (!isConnected) {
+                    FilledTonalButton(
+                        onClick = onNavigateToConnection,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    ) {
+                        Icon(Icons.Filled.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("连接", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
+        // 触摸板主体
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!isConnected) {
+                // 未连接状态
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.WifiOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    )
+                    Text(
+                        text = "未连接至服务端",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "返回设置页连接电脑",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    )
+                }
+            } else {
+                // 触摸板 Surface
+                TouchpadSurface(
+                    cursorSpeed = cursorSpeed,
+                    scrollSpeed = scrollSpeed,
+                    onSendMessage = onSendMessage,
+                )
+            }
+        }
+
+        // 底部操作栏
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                GestureHint(icon = Icons.Filled.TouchApp, label = "点击 = 左键")
+                GestureHint(icon = Icons.Filled.TouchApp, label = "双指 = 右键/滚动")
+                GestureHint(icon = Icons.Filled.OpenWith, label = "长按 + 拖 = 拖拽")
+            }
+        }
+    }
+}
+
+@Composable
+private fun GestureHint(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            fontSize = 10.sp,
+        )
+    }
+}
+
+// ── 触摸板 Surface ──────────────────────────────────────
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun TouchpadSurface(
+    cursorSpeed: Float,
+    scrollSpeed: Float,
+    onSendMessage: (Any) -> Boolean,
+) {
+    // 触摸板引擎
+    val engine = remember {
+        TouchpadEngine(cursorSpeed = cursorSpeed, scrollSpeed = scrollSpeed)
+    }
+
+    // 触控点可视化
+    val touchPoints = remember { mutableStateListOf<Offset>() }
+    var isTwoFinger by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
+    var showingRightClick by remember { mutableStateOf(false) }
+
+    // 关联引擎回调
+    LaunchedEffect(cursorSpeed, scrollSpeed) {
+        engine.onMouseMove = { dx, dy ->
+            onSendMessage(com.touchcontrol.gesture.GestureProtocol.MouseMove(dx = dx, dy = dy))
+        }
+        engine.onMouseClick = { button ->
+            onSendMessage(com.touchcontrol.gesture.GestureProtocol.MouseClick(
+                action = "click", button = button
+            ))
+            if (button == "right") {
+                showingRightClick = true
+            }
+        }
+        engine.onMouseDoubleClick = { button ->
+            repeat(2) {
+                onSendMessage(com.touchcontrol.gesture.GestureProtocol.MouseClick(
+                    action = "click", button = button
+                ))
+            }
+        }
+        engine.onMouseDown = { button ->
+            onSendMessage(com.touchcontrol.gesture.GestureProtocol.MouseClick(
+                action = "down", button = button
+            ))
+        }
+        engine.onMouseUp = { button ->
+            onSendMessage(com.touchcontrol.gesture.GestureProtocol.MouseClick(
+                action = "up", button = button
+            ))
+        }
+        engine.onScroll = { dy, dx ->
+            onSendMessage(com.touchcontrol.gesture.GestureProtocol.MouseScroll(
+                dy = dy, dx = dx
+            ))
+        }
+        engine.onZoom = { factor ->
+            if (factor > 1) {
+                onSendMessage(com.touchcontrol.gesture.GestureProtocol.KeyTap(
+                    key = "ctrl_plus", modifiers = listOf("ctrl")
+                ))
+            } else {
+                onSendMessage(com.touchcontrol.gesture.GestureProtocol.KeyTap(
+                    key = "ctrl_minus", modifiers = listOf("ctrl")
+                ))
+            }
+        }
+        engine.onDragStart = { isDragging = true }
+        engine.onDragEnd = { isDragging = false }
+        engine.updateSpeed(cursorSpeed, scrollSpeed)
+    }
+
+    // 右键反馈动画
+    LaunchedEffect(showingRightClick) {
+        if (showingRightClick) {
+            kotlinx.coroutines.delay(800)
+            showingRightClick = false
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 触摸板区域指示线
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+
+            // 四角圆角指示
+            val cornerSize = 30f
+            drawRoundRect(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                topLeft = Offset(2f, 2f),
+                size = size - Offset(4f, 4f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerSize),
+                style = Stroke(width = 1.5f),
+            )
+
+            // 中心提示文字
+            val paint = android.graphics.Paint().apply {
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f).hashCode()
+                textSize = 40f
+                textAlign = android.graphics.Paint.Align.CENTER
+                isAntiAlias = true
+            }
+            drawContext.canvas.nativeCanvas.drawText(
+                "👆 在此滑动",
+                w / 2f, h / 2f,
+                paint,
+            )
+        }
+
+        // 右键反馈
+        if (showingRightClick) {
+            Surface(
+                modifier = Modifier.size(80.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowRightAlt,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    // 直接处理原始 MotionEvent
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(cursorSpeed, scrollSpeed) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val motionEvent = event.motionEvent ?: break
+
+                        // 更新触控点可视化
+                        val points = mutableListOf<Offset>()
+                        for (i in 0 until motionEvent.pointerCount) {
+                            points.add(Offset(motionEvent.getX(i), motionEvent.getY(i)))
+                        }
+                        touchPoints.clear()
+                        touchPoints.addAll(points)
+                        isTwoFinger = motionEvent.pointerCount == 2
+
+                        // 交给手势引擎处理
+                        with(engine) {
+                            onTouchEvent(motionEvent)
+                        }
+                    }
+                }
+            }
+            .fillMaxSize(),
+    )
+}

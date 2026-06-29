@@ -28,11 +28,12 @@ jobs:
 
       - name: Build APK
         run: |
-          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          gradle :app:assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
           echo "=== Looking for APKs ==="
           find . -name "*.apk" -type f 2>/dev/null
           echo "=== Build output dir ==="
           ls -la app/build/outputs/ 2>/dev/null || echo "No outputs dir"
+          find app/build -name "*.apk" 2>/dev/null || echo "No APK found"
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
 

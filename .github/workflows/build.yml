@@ -21,27 +21,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Download Gradle & Build
+      - name: Generate Wrapper & Build
         run: |
           set -euo pipefail
-          echo "::group::Download Gradle"
-          curl -sL --connect-timeout 30 --max-time 120 \
-            "https://services.gradle.org/distributions/gradle-8.7-bin.zip" \
-            -o /tmp/gradle.zip
-          echo "Download OK"
-          unzip -q /tmp/gradle.zip -d /tmp/
+          # gradle command is provided by setup-gradle action
+          echo "::group::Gradle Version"
+          gradle --version
           echo "::endgroup::"
 
           echo "::group::Generate Wrapper"
-          /tmp/gradle-8.7/bin/gradle wrapper --gradle-version=8.7
+          gradle wrapper --gradle-version=8.7
           echo "::endgroup::"
 
           echo "::group::Build APK"
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          chmod +x gradlew
+          export ANDROID_HOME="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           ./gradlew assembleDebug --no-daemon --stacktrace
           echo "::endgroup::"
 

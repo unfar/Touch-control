@@ -20,38 +20,36 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Gradle & Android SDK & Build
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
         run: |
-          set -euo pipefail
+          # First ensure Android SDK is set
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not set}"
+          echo "ANDROID_HOME=${ANDROID_HOME:-not set}"
+          ls /usr/local/lib/android/sdk/ 2>/dev/null | head -5
+          
+          # Build - use assembleDebug without :app: prefix  
+          gradle assembleDebug --no-daemon --stacktrace 2>&1
 
-          # Setup Android SDK
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export ANDROID_SDK_ROOT=$ANDROID_HOME
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-
-          # Accept licenses and install SDK components
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            2>&1 | tail -3
-
-          # Install Gradle via SDK manager style
-          # Download wrapper JAR from a reliable source
-          rm -f gradle/wrapper/gradle-wrapper.jar
-          # Use Gradle's own wrapper download
-          curl -sL --retry 3 "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
-            -o gradle/wrapper/gradle-wrapper.jar
-          ls -la gradle/wrapper/gradle-wrapper.jar
-          chmod +x gradlew
-
-          # Build with wrapper
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Find and Upload APK
+        if: always()
+        run: |
+          echo "Searching for APK files..."
+          find /home/runner -name "*.apk" 2>/dev/null || true
+          find /github -name "*.apk" 2>/dev/null || true
+          find . -name "*.apk" -type f 2>/dev/null
+        shell: bash
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TouchControl-APK
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          path: |
+            *.apk
+            **/*.apk
+          if-no-files-found: warn

@@ -18,27 +18,35 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: 'zulu'
+          java-version: 17
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Generate Wrapper & Build
+      - name: Download Gradle wrapper & Build
         run: |
           set -euo pipefail
-          # gradle command is provided by setup-gradle action
-          echo "::group::Gradle Version"
-          gradle --version
+          
+          echo "::group::Android SDK"
+          echo "ANDROID_HOME=${ANDROID_HOME:-$(ls -d /usr/local/lib/android/sdk 2>/dev/null || echo 'not found')}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not set}"
           echo "::endgroup::"
-
-          echo "::group::Generate Wrapper"
-          gradle wrapper --gradle-version=8.7
+          
+          # Remove any corrupt wrapper JAR and download a fresh one
+          echo "::group::Download Gradle Wrapper JAR"
+          rm -f gradle/wrapper/gradle-wrapper.jar
+          curl -sL --connect-timeout 30 --max-time 60 \
+            "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
+            -o gradle/wrapper/gradle-wrapper.jar
+          ls -la gradle/wrapper/gradle-wrapper.jar
           echo "::endgroup::"
-
+          
           echo "::group::Build APK"
-          export ANDROID_HOME="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          chmod +x gradlew
+          export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -100
           echo "::endgroup::"
 
       - name: Upload APK
@@ -47,3 +55,12 @@ jobs:
           name: TouchControl-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Upload Error Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-logs
+          path: |
+            app/build/reports/
+            **/build/reports/

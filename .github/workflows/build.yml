@@ -12,10 +12,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          node-version: '20'
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -23,45 +20,38 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Android SDK
-        shell: bash
+      - name: Setup Gradle & Android SDK & Build
         run: |
-          # Android SDK is pre-installed on ubuntu-22.04
+          set -euo pipefail
+
+          # Setup Android SDK
           export ANDROID_HOME=/usr/local/lib/android/sdk
           export ANDROID_SDK_ROOT=$ANDROID_HOME
-          
-          # Ensure required SDK components are installed
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+
+          # Accept licenses and install SDK components
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             "platforms;android-34" \
             "build-tools;34.0.0" \
-            2>&1 | tail -5 || true
-          
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+            2>&1 | tail -3
 
-      - name: Build APK
-        shell: bash
-        run: |
-          cd $GITHUB_WORKSPACE
-          
-          # Download Gradle wrapper JAR
+          # Install Gradle via SDK manager style
+          # Download wrapper JAR from a reliable source
           rm -f gradle/wrapper/gradle-wrapper.jar
-          curl -sL --retry 3 \
-            "https://github.com/unfar/Touch-control/releases/download/tools/gradle-wrapper.jar" \
-            -o gradle/wrapper/gradle-wrapper.jar || \
-          curl -sL --retry 3 \
-            "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
+          # Use Gradle's own wrapper download
+          curl -sL --retry 3 "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
             -o gradle/wrapper/gradle-wrapper.jar
-          
-          chmod +x gradlew
           ls -la gradle/wrapper/gradle-wrapper.jar
-          
-          # Build
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          chmod +x gradlew
+
+          # Build with wrapper
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TouchControl-APK
-          path: app/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

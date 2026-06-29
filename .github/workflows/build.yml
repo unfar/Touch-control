@@ -20,25 +20,27 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Build APK
+      - name: Setup Gradle
+        run: |
+          # Download Gradle distribution directly  
+          curl -sL --retry 3 "https://services.gradle.org/distributions/gradle-8.7-bin.zip" -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt/
+          echo "/opt/gradle-8.7/bin" >> $GITHUB_PATH
+
+      - name: Setup Android SDK
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
-          export ANDROID_SDK_ROOT=$ANDROID_HOME
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/build-tools/34.0.0:$PATH
-          
-          # Install SDK components (non-interactive)
-          yes | sdkmanager --licenses 2>/dev/null || true
-          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>&1 | grep -v "^\[=" | tail -5
-          
-          # Download Gradle wrapper JAR from official release
-          rm -f gradle/wrapper/gradle-wrapper.jar
-          curl -sL --retry 3 \
-            "https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar" \
-            -o gradle/wrapper/gradle-wrapper.jar
-          chmod +x gradlew
-          
-          # Build using wrapper (this auto-downloads Gradle 8.7 from gradle.org)
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-34" "build-tools;34.0.0" 2>&1 | grep -E "done|Installed"
+
+      - name: Build APK
+        run: |
+          echo "Gradle version: $(gradle --version | head -2)"
+          echo "Android SDK: $ANDROID_HOME"
+          gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

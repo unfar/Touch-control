@@ -38,14 +38,6 @@ android {
     }
 }
 
-android.applicationVariants.all { variant ->
-    variant.outputs.all {
-        val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-        output.outputFileName = "TouchControl-${variant.versionName}.apk"
-        true
-    }
-}
-
 dependencies {
     // Compose BOM
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")

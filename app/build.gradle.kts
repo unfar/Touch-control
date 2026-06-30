@@ -42,6 +42,7 @@ android.applicationVariants.all { variant ->
     variant.outputs.all {
         val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
         output.outputFileName = "TouchControl-${variant.versionName}.apk"
+        true
     }
 }
 

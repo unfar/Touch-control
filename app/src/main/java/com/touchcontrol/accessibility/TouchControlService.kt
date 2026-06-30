@@ -285,11 +285,10 @@ class TouchControlService : AccessibilityService() {
     private fun typeText(text: String) {
         if (text.isEmpty()) return
 
+        // 复制文本到剪贴板，提示用户手动粘贴（GLOBAL_ACTION_PASTE 在 SDK 中不存在）
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("TouchControl", text))
-
-        // 执行粘贴
-        performGlobalAction(GLOBAL_ACTION_PASTE)
+        Log.i(TAG, "文本已复制到剪贴板: $text")
     }
 
     private fun dispatchGestureSafely(gesture: GestureDescription) {

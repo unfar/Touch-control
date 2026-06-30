@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.touchcontrol.network.ConnectionState
 import com.touchcontrol.network.DiscoveredServer
+import android.bluetooth.BluetoothDevice
 
 @Composable
 fun ConnectionScreen(
@@ -31,6 +32,8 @@ fun ConnectionScreen(
     savedPort: Int,
     discoveredServers: List<DiscoveredServer>,
     isScanning: Boolean,
+    scannedBtDevices: List<BluetoothDevice> = emptyList(),
+    isBtScanning: Boolean = false,
     onHostChange: (String) -> Unit,
     onPortChange: (Int) -> Unit,
     onConnect: () -> Unit,
@@ -38,6 +41,8 @@ fun ConnectionScreen(
     onScan: () -> Unit,
     onSelectServer: (DiscoveredServer) -> Unit,
     onStartScan: (() -> Unit)? = null,
+    onBtScan: (() -> Unit)? = null,
+    onBtConnect: ((BluetoothDevice) -> Unit)? = null,
 ) {
     var hostInput by remember { mutableStateOf(savedHost) }
     var portInput by remember { mutableStateOf(savedPort.toString()) }
@@ -291,6 +296,111 @@ fun ConnectionScreen(
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── 蓝牙设备 ──
+        if (onBtScan != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Bluetooth,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text(
+                                text = "蓝牙",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = onBtScan,
+                            enabled = !isBtScanning,
+                            shape = RoundedCornerShape(10.dp),
+                        ) {
+                            if (isBtScanning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isBtScanning) "扫描中" else "扫描")
+                        }
+                    }
+
+                    if (scannedBtDevices.isEmpty() && !isBtScanning) {
+                        Text(
+                            text = "点击「扫描」搜索已配对的蓝牙设备",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    scannedBtDevices.forEach { device ->
+                        Surface(
+                            onClick = { onBtConnect?.invoke(device) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.BluetoothConnected,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = device.name ?: "未知设备",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        text = device.address,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowForwardIos,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

@@ -23,17 +23,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.touchcontrol.gesture.TouchpadEngine
 import com.touchcontrol.network.ConnectionState
+import com.touchcontrol.network.BluetoothClient
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TouchpadScreen(
     connectionState: ConnectionState,
+    btConnectionState: BluetoothClient.ConnectionState = BluetoothClient.ConnectionState.Disconnected,
     cursorSpeed: Float,
     scrollSpeed: Float,
     onSendMessage: (Any) -> Boolean,
     onNavigateToConnection: () -> Unit,
 ) {
-    val isConnected = connectionState is ConnectionState.Connected
+    val isConnected = connectionState is ConnectionState.Connected ||
+            btConnectionState is BluetoothClient.ConnectionState.Connected
 
     Column(
         modifier = Modifier
@@ -59,11 +62,20 @@ fun TouchpadScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    val statusColor = when (connectionState) {
-                        is ConnectionState.Connected -> Color(0xFF00D68F)
-                        is ConnectionState.Connecting -> Color(0xFFFFB347)
+                    val isBt = btConnectionState is BluetoothClient.ConnectionState.Connected
+                    val statusColor = when {
+                        isBt -> Color(0xFF00D68F)
+                        connectionState is ConnectionState.Connected -> Color(0xFF00D68F)
+                        connectionState is ConnectionState.Connecting -> Color(0xFFFFB347)
                         else -> Color(0xFF666680)
                     }
+                    val statusIcon = if (isBt) Icons.Filled.Bluetooth else Icons.Filled.Wifi
+                    Icon(
+                        imageVector = statusIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = statusColor,
+                    )
                     Box(
                         modifier = Modifier
                             .size(8.dp)
@@ -71,9 +83,10 @@ fun TouchpadScreen(
                             .background(statusColor)
                     )
                     Text(
-                        text = when (connectionState) {
-                            is ConnectionState.Connected -> "${connectionState.host}"
-                            is ConnectionState.Connecting -> "连接中"
+                        text = when {
+                            isBt -> "蓝牙: ${(btConnectionState as BluetoothClient.ConnectionState.Connected).deviceName}"
+                            connectionState is ConnectionState.Connected -> "${connectionState.host}"
+                            connectionState is ConnectionState.Connecting -> "连接中"
                             else -> "未连接"
                         },
                         style = MaterialTheme.typography.bodySmall,

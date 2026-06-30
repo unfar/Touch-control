@@ -26,10 +26,15 @@ import com.touchcontrol.network.DiscoveredServer
 import com.touchcontrol.network.EmbeddedWebSocketServer
 import com.touchcontrol.network.ServerDiscovery
 import com.touchcontrol.network.WebSocketClient
+import com.touchcontrol.network.BluetoothServer
+import com.touchcontrol.network.BluetoothClient
 import com.touchcontrol.ui.navigation.Screen
 import com.touchcontrol.ui.screens.*
 import com.touchcontrol.ui.theme.TouchControlTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.touchcontrol.gesture.GestureProtocol
 
 class MainActivity : ComponentActivity() {
 
@@ -37,6 +42,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var webSocketServer: EmbeddedWebSocketServer
     private lateinit var serverDiscovery: ServerDiscovery
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var bluetoothServer: BluetoothServer
+    private lateinit var bluetoothClient: BluetoothClient
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -47,11 +54,15 @@ class MainActivity : ComponentActivity() {
         webSocketServer = EmbeddedWebSocketServer()
         serverDiscovery = ServerDiscovery(this)
         settingsRepository = SettingsRepository(this)
+        bluetoothServer = BluetoothServer()
+        bluetoothClient = BluetoothClient()
 
-        // 平板模式：连接辅助服务和 WebSocket 服务端
-        webSocketServer.onCommand = { json ->
+        // 平板模式：连接辅助服务和指令处理
+        val commandHandler: (String) -> Unit = { json ->
             TouchControlService.instance?.executeCommand(json)
         }
+        webSocketServer.onCommand = commandHandler
+        bluetoothServer.onCommand = commandHandler
 
         setContent {
             val darkMode by settingsRepository.darkMode.collectAsState(initial = true)
@@ -62,6 +73,8 @@ class MainActivity : ComponentActivity() {
                     webSocketServer = webSocketServer,
                     serverDiscovery = serverDiscovery,
                     settingsRepository = settingsRepository,
+                    bluetoothServer = bluetoothServer,
+                    bluetoothClient = bluetoothClient,
                     context = this@MainActivity,
                 )
             }
@@ -98,6 +111,8 @@ fun MainApp(
     webSocketServer: EmbeddedWebSocketServer,
     serverDiscovery: ServerDiscovery,
     settingsRepository: SettingsRepository,
+    bluetoothServer: BluetoothServer,
+    bluetoothClient: BluetoothClient,
     context: Context,
 ) {
     // 当前模式（持久化记住）
@@ -127,17 +142,26 @@ fun MainApp(
             isAccessibilityServiceEnabled(context, TouchControlService::class.java)
         }
 
+        // 自动启动蓝牙服务端
+        LaunchedEffect(Unit) {
+            val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothAdapter
+            if (btAdapter?.isEnabled == true) {
+                bluetoothServer.start(btAdapter)
+            }
+        }
+
         TabletReceiverScreen(
             server = webSocketServer,
+            bluetoothServer = bluetoothServer,
             isServiceRunning = isServiceRunning,
             onToggleService = {
-                // 打开无障碍设置
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 context.startActivity(intent)
             },
             onSwitchMode = {
                 currentMode = AppMode.NOT_SELECTED
                 webSocketServer.stop()
+                bluetoothServer.stop()
                 scope.launch { settingsRepository.saveAppMode(AppMode.NOT_SELECTED) }
             },
         )
@@ -157,12 +181,38 @@ fun MainApp(
     val cursorSpeed by settingsRepository.cursorSpeed.collectAsState(initial = 1f)
     val scrollSpeed by settingsRepository.scrollSpeed.collectAsState(initial = 1f)
 
-    // 进入连接页时自动扫描
+    // 进入连接页时自动扫描 WiFi
     LaunchedEffect(showConnection) {
         if (showConnection) {
             isScanning = true
             discoveredServers = serverDiscovery.discover(3000)
             isScanning = false
+        }
+    }
+
+    // ── 蓝牙发现与连接 ──
+    var scannedBtDevices by remember { mutableStateOf<List<android.bluetooth.BluetoothDevice>>(emptyList()) }
+    var isBtScanning by remember { mutableStateOf(false) }
+    val btConnectionState by bluetoothClient.state.collectAsState()
+
+    // 蓝牙扫描
+    fun scanBluetooth() {
+        scope.launch {
+            isBtScanning = true
+            scannedBtDevices = withContext(Dispatchers.IO) {
+                val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothAdapter
+                if (btAdapter?.isEnabled == true) {
+                    btAdapter.bondedDevices?.filter { it.type != android.bluetooth.BluetoothDevice.DEVICE_TYPE_LE }?.toList()
+                        ?: emptyList()
+                } else emptyList()
+            }
+            isBtScanning = false
+        }
+    }
+
+    fun connectBluetooth(device: android.bluetooth.BluetoothDevice) {
+        scope.launch {
+            bluetoothClient.connect(device)
         }
     }
 
@@ -219,6 +269,8 @@ fun MainApp(
                     savedPort = savedPort,
                     discoveredServers = discoveredServers,
                     isScanning = isScanning,
+                    scannedBtDevices = scannedBtDevices,
+                    isBtScanning = isBtScanning,
                     onHostChange = { host -> scope.launch { settingsRepository.saveHost(host) } },
                     onPortChange = { port -> scope.launch { settingsRepository.savePort(port) } },
                     onConnect = {
@@ -248,15 +300,24 @@ fun MainApp(
                         scope.launch { settingsRepository.saveAppMode(AppMode.NOT_SELECTED) }
                     },
                     onStartScan = { showScanner = true },
+                    onBtScan = { scanBluetooth() },
+                    onBtConnect = { device -> connectBluetooth(device) },
                 )
             } else {
                 when (selectedScreen) {
                     Screen.Touchpad -> {
                         TouchpadScreen(
                             connectionState = connectionState,
+                            btConnectionState = btConnectionState,
                             cursorSpeed = cursorSpeed,
                             scrollSpeed = scrollSpeed,
-                            onSendMessage = { msg -> webSocketClient.send(msg) },
+                            onSendMessage = { msg ->
+                                val wsSent = webSocketClient.send(msg)
+                                if (btConnectionState is BluetoothClient.ConnectionState.Connected) {
+                                    bluetoothClient.send(com.touchcontrol.gesture.GestureProtocol.encode(msg))
+                                }
+                                wsSent
+                            },
                             onNavigateToConnection = { showConnection = true },
                         )
                     }
@@ -291,6 +352,8 @@ fun ConnectionScreenWrapper(
     savedPort: Int,
     discoveredServers: List<DiscoveredServer>,
     isScanning: Boolean,
+    scannedBtDevices: List<android.bluetooth.BluetoothDevice> = emptyList(),
+    isBtScanning: Boolean = false,
     onHostChange: (String) -> Unit,
     onPortChange: (Int) -> Unit,
     onConnect: () -> Unit,
@@ -300,6 +363,8 @@ fun ConnectionScreenWrapper(
     onBack: () -> Unit,
     onSwitchMode: () -> Unit,
     onStartScan: (() -> Unit)? = null,
+    onBtScan: (() -> Unit)? = null,
+    onBtConnect: ((android.bluetooth.BluetoothDevice) -> Unit)? = null,
 ) {
     Scaffold(
         topBar = {
@@ -328,6 +393,8 @@ fun ConnectionScreenWrapper(
                 savedPort = savedPort,
                 discoveredServers = discoveredServers,
                 isScanning = isScanning,
+                scannedBtDevices = scannedBtDevices,
+                isBtScanning = isBtScanning,
                 onHostChange = onHostChange,
                 onPortChange = onPortChange,
                 onConnect = onConnect,
@@ -335,6 +402,8 @@ fun ConnectionScreenWrapper(
                 onScan = onScan,
                 onSelectServer = onSelectServer,
                 onStartScan = onStartScan,
+                onBtScan = onBtScan,
+                onBtConnect = onBtConnect,
             )
         }
     }

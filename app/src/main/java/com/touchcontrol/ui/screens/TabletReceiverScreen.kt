@@ -27,10 +27,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.touchcontrol.network.EmbeddedWebSocketServer
 import com.touchcontrol.network.EmbeddedWebSocketServer.ClientState
+import com.touchcontrol.network.BluetoothServer
 
 @Composable
 fun TabletReceiverScreen(
     server: EmbeddedWebSocketServer,
+    bluetoothServer: BluetoothServer = BluetoothServer(),
     isServiceRunning: Boolean,
     onToggleService: () -> Unit,
     onSwitchMode: () -> Unit,
@@ -231,6 +233,21 @@ fun TabletReceiverScreen(
                                 is ClientState.Connected -> "已连接: ${state.host}"
                                 else -> "等待手机连接…"
                             }
+                        },
+                    )
+                    // ── 蓝牙状态 ──
+                    HorizontalDivider()
+                    val btState by bluetoothServer.state.collectAsState()
+                    InfoRow(
+                        icon = Icons.Filled.Bluetooth,
+                        label = "蓝牙",
+                        value = when (btState) {
+                            is BluetoothServer.ServerState.Listening -> "等待蓝牙连接…"
+                            is BluetoothServer.ServerState.Connected ->
+                                "已连接: ${(btState as BluetoothServer.ServerState.Connected).deviceName}"
+                            is BluetoothServer.ServerState.Error ->
+                                "错误: ${(btState as BluetoothServer.ServerState.Error).message}"
+                            else -> "未启动"
                         },
                     )
                 } else {

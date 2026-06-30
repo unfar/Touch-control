@@ -11,6 +11,9 @@ import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -70,14 +73,6 @@ class MainActivity : ComponentActivity() {
         bluetoothServer.stop()
         super.onDestroy()
     }
-}
-
-// ── 模式枚举 ──
-
-enum class AppMode {
-    NOT_SELECTED,
-    PHONE_CONTROLLER,
-    TABLET_RECEIVER,
 }
 
 // ── 底部导航项 ──
@@ -159,7 +154,7 @@ fun MainApp(
     // ═══════════════════════════════════════════
     // 手机模式（控制器 — 蓝牙扫描 + 触摸板）
     // ═══════════════════════════════════════════
-    var selectedScreen by remember { mutableStateOf(Screen.Touchpad) }
+    var selectedScreen: Screen by remember { mutableStateOf(Screen.Touchpad) }
     var showBtScan by remember { mutableStateOf(false) }
 
     val btState by bluetoothClient.state.collectAsState()
@@ -258,6 +253,7 @@ fun MainApp(
                             btState = btState,
                             onSendMessage = { msg ->
                                 bluetoothClient.send(com.touchcontrol.gesture.GestureProtocol.encode(msg))
+                                true
                             },
                         )
                     }

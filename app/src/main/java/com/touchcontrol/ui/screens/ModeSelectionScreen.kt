@@ -92,7 +92,7 @@ fun ModeSelectionScreen(
             features = listOf(
                 "多点触控手势",
                 "QWERTY 全键盘",
-                "局域网自动发现",
+                "蓝牙自动连接",
             ),
             gradientColors = listOf(Color(0xFF6C63FF), Color(0xFF8B6CFF)),
             onClick = { onModeSelected(AppMode.PHONE_CONTROLLER) },
@@ -107,8 +107,8 @@ fun ModeSelectionScreen(
             subtitle = "接收手机端控制，模拟屏幕触摸",
             features = listOf(
                 "开启无障碍服务",
-                "启动 WebSocket 服务端",
-                "显示连接二维码/IP",
+                "启动蓝牙服务端",
+                "等待手机端连接",
             ),
             gradientColors = listOf(Color(0xFF00D68F), Color(0xFF00BFA5)),
             onClick = { onModeSelected(AppMode.TABLET_RECEIVER) },

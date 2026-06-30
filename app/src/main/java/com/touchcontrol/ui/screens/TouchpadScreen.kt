@@ -98,7 +98,7 @@ fun TouchpadScreen(
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     ) {
-                        Icon(Icons.Filled.Wifi, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.Bluetooth, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("连接", style = MaterialTheme.typography.labelSmall)
                     }

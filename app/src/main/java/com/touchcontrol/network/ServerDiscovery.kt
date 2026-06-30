@@ -61,9 +61,10 @@ class ServerDiscovery(private val context: Context) {
                     val host = packet.address.hostAddress ?: continue
                     val port = parts.getOrNull(0)?.toIntOrNull() ?: 9090
                     val name = parts.getOrNull(1) ?: "Unknown"
+                    val token = parts.getOrNull(2)?.takeIf { it.isNotBlank() }
 
                     if (servers.none { it.host == host && it.port == port }) {
-                        servers.add(DiscoveredServer(host, port, name))
+                        servers.add(DiscoveredServer(host, port, name, token))
                     }
                 }
             } catch (e: SocketTimeoutException) {
@@ -97,4 +98,5 @@ data class DiscoveredServer(
     val host: String,
     val port: Int,
     val name: String,
+    val token: String? = null,
 )

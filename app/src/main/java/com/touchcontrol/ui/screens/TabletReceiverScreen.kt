@@ -43,6 +43,7 @@ fun TabletReceiverScreen(
 
     val statusColor by animateColorAsState(
         targetValue = when {
+            !isServiceRunning -> Color(0xFFFF4757)
             serverState is EmbeddedWebSocketServer.ServerState.Running &&
             clientState is ClientState.Connected -> Color(0xFF00D68F)
             serverState is EmbeddedWebSocketServer.ServerState.Running -> Color(0xFF6C63FF)
@@ -60,6 +61,61 @@ fun TabletReceiverScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(16.dp))
+
+        // ── ⚠️ 无障碍服务未开启 → 全宽警告横幅 ──
+        if (!isServiceRunning) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF9B2C2C).copy(alpha = 0.9f)
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp),
+                        )
+                        Text(
+                            text = "无障碍服务未开启",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                        )
+                    }
+                    Text(
+                        text = "平板模式需要无障碍服务才能模拟触摸操作。请前往系统设置开启「TouchControl 服务」。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.9f),
+                    )
+                    Button(
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF9B2C2C),
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("前往设置开启", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
 
         // 返回切换模式
         Row(

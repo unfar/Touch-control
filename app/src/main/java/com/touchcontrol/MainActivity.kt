@@ -238,7 +238,7 @@ fun MainApp(
                         scope.launch {
                             settingsRepository.saveHost(server.host)
                             settingsRepository.savePort(server.port)
-                            webSocketClient.connect(server.host, server.port)
+                            webSocketClient.connect(server.host, server.port, server.token)
                         }
                     },
                     onBack = { showConnection = false },

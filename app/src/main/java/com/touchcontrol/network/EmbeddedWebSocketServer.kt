@@ -396,7 +396,7 @@ class EmbeddedWebSocketServer(
                         socket.receive(packet)
                         val msg = String(packet.data, 0, packet.length, Charsets.UTF_8)
                         if (msg == DISCOVERY_MSG) {
-                            val response = "$DISCOVERY_RESPONSE:$port:$DEVICE_NAME"
+                            val response = "$DISCOVERY_RESPONSE:$port:$DEVICE_NAME:$token"
                             val respData = response.toByteArray()
                             val respPacket = DatagramPacket(
                                 respData, respData.size,

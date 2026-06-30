@@ -27,6 +27,10 @@ class EmbeddedWebSocketServer(
         private val WS_GUID = "258EAFA5-E914-47DA-95CA-5AB9DC11B85B".toByteArray()
         private const val TOKEN_LENGTH = 6
         private const val TOKEN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        private const val DISCOVERY_PORT = 9091
+        private const val DISCOVERY_MSG = "TOUCHCONTROL_DISCOVER"
+        private const val DISCOVERY_RESPONSE = "TOUCHCONTROL_SERVER"
+        private const val DEVICE_NAME = "Android平板"
 
         fun generateToken(): String {
             return (1..TOKEN_LENGTH)
@@ -65,6 +69,8 @@ class EmbeddedWebSocketServer(
     private var serverSocket: ServerSocket? = null
     private var clientSocket: Socket? = null
     private var clientJob: Job? = null
+    private var discoveryJob: Job? = null
+    private var discoverySocket: DatagramSocket? = null
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -104,6 +110,9 @@ class EmbeddedWebSocketServer(
                 _serverState.value = ServerState.Running(host ?: "0.0.0.0", port)
                 Log.i(TAG, "服务端已启动: $host:$port  token=$token")
 
+                // 启动 UDP 发现响应器
+                launchDiscoveryResponder(host ?: "0.0.0.0")
+
                 while (isActive) {
                     try {
                         val socket = serverSocket?.accept() ?: continue
@@ -133,6 +142,10 @@ class EmbeddedWebSocketServer(
         serverJob = null
         serverSocket?.close()
         serverSocket = null
+        discoveryJob?.cancel()
+        discoveryJob = null
+        discoverySocket?.close()
+        discoverySocket = null
         _serverState.value = ServerState.Stopped
     }
 
@@ -355,9 +368,55 @@ class EmbeddedWebSocketServer(
     private fun cleanup() {
         try { clientSocket?.close() } catch (_: Exception) {}
         try { serverSocket?.close() } catch (_: Exception) {}
+        try { discoverySocket?.close() } catch (_: Exception) {}
         clientSocket = null
         serverSocket = null
+        discoverySocket = null
         _clientState.value = ClientState.Disconnected
+    }
+
+    /**
+     * 启动 UDP 发现响应器
+     * 监听 DISCOVERY_PORT，收到发现消息后回复服务信息
+     */
+    private fun launchDiscoveryResponder(localHost: String) {
+        discoveryJob?.cancel()
+        discoveryJob = scope.launch {
+            try {
+                val socket = DatagramSocket(DISCOVERY_PORT)
+                discoverySocket = socket
+                socket.broadcast = true
+                socket.soTimeout = 5000
+                Log.i(TAG, "UDP 发现响应器已启动，端口: $DISCOVERY_PORT")
+
+                val buffer = ByteArray(256)
+                while (isActive) {
+                    try {
+                        val packet = DatagramPacket(buffer, buffer.size)
+                        socket.receive(packet)
+                        val msg = String(packet.data, 0, packet.length, Charsets.UTF_8)
+                        if (msg == DISCOVERY_MSG) {
+                            val response = "$DISCOVERY_RESPONSE:$port:$DEVICE_NAME"
+                            val respData = response.toByteArray()
+                            val respPacket = DatagramPacket(
+                                respData, respData.size,
+                                packet.address, packet.port
+                            )
+                            socket.send(respPacket)
+                            Log.i(TAG, "已响应发现请求: ${packet.address.hostAddress}")
+                        }
+                    } catch (e: SocketTimeoutException) {
+                        continue
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "UDP 发现响应器异常", e)
+            } finally {
+                try { discoverySocket?.close() } catch (_: Exception) {}
+            }
+        }
     }
 
     private fun getLocalIpAddress(): String? {

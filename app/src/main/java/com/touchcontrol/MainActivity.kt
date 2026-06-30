@@ -157,6 +157,15 @@ fun MainApp(
     val cursorSpeed by settingsRepository.cursorSpeed.collectAsState(initial = 1f)
     val scrollSpeed by settingsRepository.scrollSpeed.collectAsState(initial = 1f)
 
+    // 进入连接页时自动扫描
+    LaunchedEffect(showConnection) {
+        if (showConnection) {
+            isScanning = true
+            discoveredServers = serverDiscovery.discover(3000)
+            isScanning = false
+        }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {

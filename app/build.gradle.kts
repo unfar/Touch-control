@@ -63,9 +63,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
 
-    // OkHttp (WebSocket)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
     // Kotlin Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
@@ -78,18 +75,8 @@ dependencies {
     // Window size (adaptive layout)
     implementation("androidx.compose.material3:material3-window-size-class")
 
-    // ZXing (QR code generation - tablet side)
+    // ZXing (QR code generation)
     implementation("com.google.zxing:core:3.5.3")
-
-    // CameraX (QR scanning - phone side)
-    val cameraxVersion = "1.3.1"
-    implementation("androidx.camera:camera-core:$cameraxVersion")
-    implementation("androidx.camera:camera-camera2:$cameraxVersion")
-    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
-    implementation("androidx.camera:camera-view:$cameraxVersion")
-
-    // ML Kit Barcode Scanning (QR scanner)
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

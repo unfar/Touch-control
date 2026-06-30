@@ -21,12 +21,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.touchcontrol.gesture.GestureProtocol
-import com.touchcontrol.network.ConnectionState
+import com.touchcontrol.network.BluetoothClient
 
 data class KeyDef(
     val label: String,
     val keyCode: String,
-    val width: Int = 1,  // 单位宽度
+    val width: Int = 1,
     val modifiers: List<String> = emptyList(),
     val isToggle: Boolean = false,
 )
@@ -77,10 +77,10 @@ private val F_KEYS = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KeyboardScreen(
-    connectionState: ConnectionState,
+    btState: BluetoothClient.ConnectionState = BluetoothClient.ConnectionState.Disconnected,
     onSendMessage: (Any) -> Boolean,
 ) {
-    val isConnected = connectionState is ConnectionState.Connected
+    val isConnected = btState is BluetoothClient.ConnectionState.Connected
     var activeModifiers by remember { mutableStateOf(setOf<String>()) }
     var textInput by remember { mutableStateOf("") }
     var showingNumpad by remember { mutableStateOf(false) }
@@ -163,147 +163,39 @@ fun KeyboardScreen(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // 修饰键行
-            item {
-                KeyRow(
-                    keys = MODIFIERS.map { key ->
-                        key.copy(
-                            label = if (activeModifiers.contains(key.keyCode))
-                                "● ${key.label}" else key.label
-                        )
-                    },
-                    activeModifiers = activeModifiers,
-                    onKeyPress = { keyDef ->
-                        if (keyDef.isToggle) {
-                            activeModifiers = if (activeModifiers.contains(keyDef.keyCode))
-                                activeModifiers - keyDef.keyCode
-                            else
-                                activeModifiers + keyDef.keyCode
-
-                            onSendMessage(GestureProtocol.KeyTap(key = keyDef.keyCode))
-                        }
-                    },
-                )
-            }
-
-            // 功能键区域
+            item { KeyRow(keys = MODIFIERS, activeModifiers = activeModifiers, onKeyPress = {
+                if (it.isToggle) {
+                    activeModifiers = if (activeModifiers.contains(it.keyCode))
+                        activeModifiers - it.keyCode else activeModifiers + it.keyCode
+                }
+                onSendMessage(GestureProtocol.KeyTap(key = it.keyCode, modifiers = activeModifiers.toList()))
+            }) }
             if (showingFnKeys) {
-                item {
-                    KeyRow(
-                        keys = F_KEYS,
-                        activeModifiers = activeModifiers,
-                        onKeyPress = { keyDef ->
-                            onSendMessage(GestureProtocol.KeyTap(
-                                key = keyDef.keyCode,
-                                modifiers = activeModifiers.toList(),
-                            ))
-                        },
-                    )
-                }
+                item { KeyRow(keys = F_KEYS, activeModifiers = activeModifiers, onKeyPress = {
+                    onSendMessage(GestureProtocol.KeyTap(key = it.keyCode, modifiers = activeModifiers.toList()))
+                }) }
             }
-
-            // 第1行
-            item {
-                KeyRow(
-                    keys = ROW_1,
-                    activeModifiers = activeModifiers,
-                    onKeyPress = { keyDef ->
-                        val key = if (activeModifiers.contains("shift"))
-                            keyDef.keyCode.uppercase() else keyDef.keyCode
-                        onSendMessage(GestureProtocol.KeyTap(
-                            key = key,
-                            modifiers = activeModifiers.toList(),
-                        ))
-                    },
-                )
-            }
-
-            // 第2行
-            item {
-                KeyRow(
-                    keys = ROW_2,
-                    activeModifiers = activeModifiers,
-                    onKeyPress = { keyDef ->
-                        val key = if (activeModifiers.contains("shift"))
-                            keyDef.keyCode.uppercase() else keyDef.keyCode
-                        onSendMessage(GestureProtocol.KeyTap(
-                            key = key,
-                            modifiers = activeModifiers.toList(),
-                        ))
-                    },
-                )
-            }
-
-            // 第3行
-            item {
-                KeyRow(
-                    keys = ROW_3,
-                    activeModifiers = activeModifiers,
-                    onKeyPress = { keyDef ->
-                        val key = if (activeModifiers.contains("shift"))
-                            keyDef.keyCode.uppercase() else keyDef.keyCode
-                        onSendMessage(GestureProtocol.KeyTap(
-                            key = key,
-                            modifiers = activeModifiers.toList(),
-                        ))
-                    },
-                )
-            }
-
-            // 特殊键行
-            item {
-                KeyRow(
-                    keys = SPECIALS,
-                    activeModifiers = activeModifiers,
-                    onKeyPress = { keyDef ->
-                        onSendMessage(GestureProtocol.KeyTap(
-                            key = keyDef.keyCode,
-                            modifiers = activeModifiers.toList(),
-                        ))
-                    },
-                )
-            }
-
-            // 数字小键盘
+            item { KeyRow(keys = ROW_1, activeModifiers = activeModifiers, onKeyPress = {
+                val key = if (activeModifiers.contains("shift")) it.keyCode.uppercase() else it.keyCode
+                onSendMessage(GestureProtocol.KeyTap(key = key, modifiers = activeModifiers.toList()))
+            }) }
+            item { KeyRow(keys = ROW_2, activeModifiers = activeModifiers, onKeyPress = {
+                val key = if (activeModifiers.contains("shift")) it.keyCode.uppercase() else it.keyCode
+                onSendMessage(GestureProtocol.KeyTap(key = key, modifiers = activeModifiers.toList()))
+            }) }
+            item { KeyRow(keys = ROW_3, activeModifiers = activeModifiers, onKeyPress = {
+                val key = if (activeModifiers.contains("shift")) it.keyCode.uppercase() else it.keyCode
+                onSendMessage(GestureProtocol.KeyTap(key = key, modifiers = activeModifiers.toList()))
+            }) }
+            item { KeyRow(keys = SPECIALS, activeModifiers = activeModifiers, onKeyPress = {
+                onSendMessage(GestureProtocol.KeyTap(key = it.keyCode, modifiers = activeModifiers.toList()))
+            }) }
             if (showingNumpad) {
-                item {
-                    KeyRow(
-                        keys = listOf(
-                            KeyDef("7", "7"), KeyDef("8", "8"), KeyDef("9", "9"),
-                        ),
-                        activeModifiers = activeModifiers,
-                        onKeyPress = { keyDef -> onSendMessage(GestureProtocol.KeyTap(key = keyDef.keyCode)) },
-                    )
-                }
-                item {
-                    KeyRow(
-                        keys = listOf(
-                            KeyDef("4", "4"), KeyDef("5", "5"), KeyDef("6", "6"),
-                        ),
-                        activeModifiers = activeModifiers,
-                        onKeyPress = { keyDef -> onSendMessage(GestureProtocol.KeyTap(key = keyDef.keyCode)) },
-                    )
-                }
-                item {
-                    KeyRow(
-                        keys = listOf(
-                            KeyDef("1", "1"), KeyDef("2", "2"), KeyDef("3", "3"),
-                        ),
-                        activeModifiers = activeModifiers,
-                        onKeyPress = { keyDef -> onSendMessage(GestureProtocol.KeyTap(key = keyDef.keyCode)) },
-                    )
-                }
-                item {
-                    KeyRow(
-                        keys = listOf(
-                            KeyDef("0", "0", width = 2), KeyDef(".", "period"),
-                        ),
-                        activeModifiers = activeModifiers,
-                        onKeyPress = { keyDef -> onSendMessage(GestureProtocol.KeyTap(key = keyDef.keyCode)) },
-                    )
-                }
+                item { KeyRow(keys = listOf(KeyDef("7","7"),KeyDef("8","8"),KeyDef("9","9")), activeModifiers = activeModifiers, onKeyPress = { onSendMessage(GestureProtocol.KeyTap(key=it.keyCode)) }) }
+                item { KeyRow(keys = listOf(KeyDef("4","4"),KeyDef("5","5"),KeyDef("6","6")), activeModifiers = activeModifiers, onKeyPress = { onSendMessage(GestureProtocol.KeyTap(key=it.keyCode)) }) }
+                item { KeyRow(keys = listOf(KeyDef("1","1"),KeyDef("2","2"),KeyDef("3","3")), activeModifiers = activeModifiers, onKeyPress = { onSendMessage(GestureProtocol.KeyTap(key=it.keyCode)) }) }
+                item { KeyRow(keys = listOf(KeyDef("0","0",width=2),KeyDef(".","period")), activeModifiers = activeModifiers, onKeyPress = { onSendMessage(GestureProtocol.KeyTap(key=it.keyCode)) }) }
             }
-
             item { Spacer(Modifier.height(16.dp)) }
         }
     }
@@ -321,34 +213,23 @@ private fun KeyRow(
     ) {
         keys.forEach { keyDef ->
             val isActive = activeModifiers.contains(keyDef.keyCode)
-
-            val buttonColor = when {
-                isActive -> MaterialTheme.colorScheme.primary
-                keyDef.modifiers.isNotEmpty() -> MaterialTheme.colorScheme.surfaceVariant
-                keyDef.isToggle && isActive -> MaterialTheme.colorScheme.primary
-                keyDef.isToggle -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-
-            val textColor = when {
-                isActive -> MaterialTheme.colorScheme.onPrimary
-                else -> MaterialTheme.colorScheme.onSurface
-            }
-
             Button(
                 onClick = { onKeyPress(keyDef) },
-                modifier = Modifier
-                    .weight(keyDef.width.toFloat())
-                    .height(44.dp),
+                modifier = Modifier.weight(keyDef.width.toFloat()).height(44.dp),
                 shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = when {
+                        isActive -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                ),
                 contentPadding = PaddingValues(0.dp),
             ) {
                 Text(
                     text = keyDef.label,
                     fontSize = if (keyDef.label.length > 2) 12.sp else 14.sp,
                     fontWeight = if (keyDef.label.length == 1) FontWeight.Medium else FontWeight.Normal,
-                    color = textColor,
+                    color = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
             }

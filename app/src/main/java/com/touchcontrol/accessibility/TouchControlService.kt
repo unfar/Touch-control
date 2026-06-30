@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.WindowManager
 import android.content.Context
+import android.media.AudioManager
 import org.json.JSONObject
 
 /**
@@ -53,7 +54,7 @@ class TouchControlService : AccessibilityService() {
             display
         } else {
             @Suppress("DEPRECATION")
-            windowManager.defaultDisplay
+            (getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay
         }
 
         if (display != null) {
@@ -173,8 +174,8 @@ class TouchControlService : AccessibilityService() {
                     "notifications" -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
                     "quick_settings"-> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
                     "enter"         -> performGlobalAction(GLOBAL_ACTION_BACK) // 去掉，用 tap
-                    "volume_up"     -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_VOLUME_UP)
-                    "volume_down"   -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_VOLUME_DOWN)
+                    "volume_up"     -> { val am = getSystemService(AUDIO_SERVICE) as AudioManager; am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI) }
+                    "volume_down"   -> { val am = getSystemService(AUDIO_SERVICE) as AudioManager; am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI) }
                     "power_dialog"  -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
                     "split_screen"  -> performGlobalAction(GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
                     "show_desktop"  -> performGlobalAction(GLOBAL_ACTION_HOME)

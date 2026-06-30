@@ -261,6 +261,11 @@ fun TouchpadSurface(
     // 跟踪之前的触控点数，用于检测 down/up 事件
     var previousPointerCount by remember { mutableIntStateOf(0) }
 
+    // 提取 MaterialTheme 颜色（Canvas 内无法直接访问）
+    val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+    val surfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+    val textPaintColor = surfaceVariantColor.hashCode()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -276,7 +281,7 @@ fun TouchpadSurface(
             // 四角圆角指示
             val cornerSize = 30f
             drawRoundRect(
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                color = outlineColor,
                 topLeft = Offset(2f, 2f),
                 size = androidx.compose.ui.geometry.Size(w - 4f, h - 4f),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerSize),
@@ -285,7 +290,7 @@ fun TouchpadSurface(
 
             // 中心提示文字
             val paint = android.graphics.Paint().apply {
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f).hashCode()
+                color = textPaintColor
                 textSize = 40f
                 textAlign = android.graphics.Paint.Align.CENTER
                 isAntiAlias = true

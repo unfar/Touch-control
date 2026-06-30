@@ -170,9 +170,11 @@ fun TabletReceiverScreen(
                     InfoRow(
                         icon = Icons.Filled.DevicesOther,
                         label = "客户端状态",
-                        value = when (clientState) {
-                            is ClientState.Connected -> "已连接: ${clientState.host}"
-                            else -> "等待手机连接…"
+                        value = clientState.let { state ->
+                            when (state) {
+                                is ClientState.Connected -> "已连接: ${state.host}"
+                                else -> "等待手机连接…"
+                            }
                         },
                     )
                 } else {

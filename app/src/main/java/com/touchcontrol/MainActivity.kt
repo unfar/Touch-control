@@ -145,7 +145,7 @@ fun MainApp(
     }
 
     // ── 手机模式 ──────────────────────────────────────
-    var selectedScreen by remember { mutableStateOf(Screen.Touchpad) }
+    var selectedScreen: Screen by remember { mutableStateOf(Screen.Touchpad) }
     var showConnection by remember { mutableStateOf(false) }
     var showScanner by remember { mutableStateOf(false) }
     var discoveredServers by remember { mutableStateOf<List<DiscoveredServer>>(emptyList()) }

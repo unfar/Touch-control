@@ -10,6 +10,8 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import android.view.WindowManager
+import android.content.Context
 import org.json.JSONObject
 
 /**
@@ -63,6 +65,15 @@ class TouchControlService : AccessibilityService() {
             cursorX = 0.5f
             cursorY = 0.5f
             Log.i(TAG, "屏幕尺寸: ${screenWidth.toInt()}x${screenHeight.toInt()}")
+        } else {
+            // Fallback: use WindowManager
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            @Suppress("DEPRECATION")
+            val dm = wm.defaultDisplay.let { d ->
+                android.util.DisplayMetrics().also { d.getRealMetrics(it) }
+            }
+            screenWidth = dm.widthPixels.toFloat()
+            screenHeight = dm.heightPixels.toFloat()
         }
     }
 
@@ -162,8 +173,8 @@ class TouchControlService : AccessibilityService() {
                     "notifications" -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
                     "quick_settings"-> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
                     "enter"         -> performGlobalAction(GLOBAL_ACTION_BACK) // 去掉，用 tap
-                    "volume_up"     -> performGlobalAction(GLOBAL_ACTION_VOLUME_UP)
-                    "volume_down"   -> performGlobalAction(GLOBAL_ACTION_VOLUME_DOWN)
+                    "volume_up"     -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_VOLUME_UP)
+                    "volume_down"   -> performGlobalAction(AccessibilityService.GLOBAL_ACTION_VOLUME_DOWN)
                     "power_dialog"  -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
                     "split_screen"  -> performGlobalAction(GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
                     "show_desktop"  -> performGlobalAction(GLOBAL_ACTION_HOME)

@@ -1,10 +1,8 @@
 package com.touchcontrol.ui.screens
 
-import android.view.MotionEvent
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,16 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.*
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.touchcontrol.gesture.TouchpadEngine
 import com.touchcontrol.network.ConnectionState
-import kotlin.math.abs
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -201,8 +196,8 @@ fun TouchpadSurface(
     // 触控点可视化
     val touchPoints = remember { mutableStateListOf<Offset>() }
     var isTwoFinger by remember { mutableStateOf(false) }
-    var isDragging by remember { mutableStateOf(false) }
     var showingRightClick by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
 
     // 关联引擎回调
     LaunchedEffect(cursorSpeed, scrollSpeed) {
@@ -263,6 +258,9 @@ fun TouchpadSurface(
         }
     }
 
+    // 跟踪之前的触控点数，用于检测 down/up 事件
+    var previousPointerCount by remember { mutableIntStateOf(0) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -280,7 +278,7 @@ fun TouchpadSurface(
             drawRoundRect(
                 color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
                 topLeft = Offset(2f, 2f),
-                size = size - Offset(4f, 4f),
+                size = androidx.compose.ui.geometry.Size(w - 4f, h - 4f),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerSize),
                 style = Stroke(width = 1.5f),
             )
@@ -318,32 +316,47 @@ fun TouchpadSurface(
         }
     }
 
-    // 直接处理原始 MotionEvent
+    // 使用 Compose 指针 API 直接处理触摸，无需 MotionEvent
     Box(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(cursorSpeed, scrollSpeed) {
                 awaitPointerEventScope {
                     while (true) {
-                        val event = awaitPointerEvent()
-                        val motionEvent = event.motionEvent ?: break
+                        val pointerEvent = awaitPointerEvent()
+                        val changes = pointerEvent.changes
+                        val currentCount = changes.size
 
                         // 更新触控点可视化
-                        val points = mutableListOf<Offset>()
-                        for (i in 0 until motionEvent.pointerCount) {
-                            points.add(Offset(motionEvent.getX(i), motionEvent.getY(i)))
-                        }
                         touchPoints.clear()
-                        touchPoints.addAll(points)
-                        isTwoFinger = motionEvent.pointerCount == 2
+                        for (change in changes) {
+                            touchPoints.add(change.position)
+                        }
+                        isTwoFinger = currentCount >= 2
 
-                        // 交给手势引擎处理
-                        with(engine) {
-                            onTouchEvent(motionEvent)
+                        // 构建引擎需要的指针数据
+                        val activePointers = changes.mapIndexed { index, change ->
+                            index to (change.position.x to change.position.y)
+                        }
+
+                        // 判断事件类型
+                        val actionType = when {
+                            currentCount > previousPointerCount -> "down"
+                            currentCount == 0 -> "up"
+                            else -> "move"
+                        }
+
+                        // 交给引擎处理
+                        engine.onComposeTouchData(activePointers, actionType)
+
+                        previousPointerCount = currentCount
+
+                        // 标记事件已消费
+                        if (changes.isNotEmpty()) {
+                            changes.forEach { it.consume() }
                         }
                     }
                 }
-            }
-            .fillMaxSize(),
+            },
     )
 }

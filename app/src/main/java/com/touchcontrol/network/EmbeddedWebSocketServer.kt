@@ -8,7 +8,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.*
 import java.net.*
 import java.security.MessageDigest
-import java.util.*
+import java.util.Base64
+import kotlin.random.Random
 
 /**
  * 嵌入式 WebSocket 服务端
@@ -183,13 +184,15 @@ class EmbeddedWebSocketServer(
                         payloadLen == 126L -> {
                             val ext = ByteArray(2)
                             readFully(input, ext, 2)
-                            payloadLen = ((ext[0].toInt() and 0xFF) shl 8) or (ext[1].toInt() and 0xFF).toLong()
+                            payloadLen = (((ext[0].toInt() and 0xFF) shl 8) or (ext[1].toInt() and 0xFF)).toLong()
                         }
                         payloadLen == 127L -> {
                             val ext = ByteArray(8)
                             readFully(input, ext, 8)
                             payloadLen = 0L
-                            for (i in 0..7) payloadLen = (payloadLen shl 8) or (ext[i].toInt() and 0xFF).toLong()
+                            for (i in 0..7) {
+                                payloadLen = (payloadLen shl 8) or ((ext[i].toInt() and 0xFF).toLong())
+                            }
                         }
                     }
 
@@ -316,7 +319,7 @@ class EmbeddedWebSocketServer(
     private fun sendFrame(output: OutputStream, opcode: Int, payload: ByteArray) {
         try {
             val frame = ByteArrayOutputStream()
-            frame.write((0x80 or opcode).toByte())
+            frame.write(0x80 or opcode)
             if (payload.size < 126) {
                 frame.write(payload.size)
             } else {

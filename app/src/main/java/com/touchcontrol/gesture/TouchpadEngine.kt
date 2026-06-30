@@ -83,6 +83,79 @@ class TouchpadEngine(
         }
     }
 
+    /**
+     * Compose 兼容的触摸数据处理入口
+     * 接收来自 Compose awaitPointerEvent 的 PointerInputChange 数据
+     *
+     * @param activePointers 当前所有活动触控点的位置 [(pointerId, (x, y))]
+     * @param actionType 事件类型: "down" (新按下), "move", "up" (抬起), "cancel"
+     */
+    fun onComposeTouchData(
+        activePointers: List<Pair<Int, Pair<Float, Float>>>,
+        actionType: String = "move",
+    ) {
+        when (actionType) {
+            "cancel" -> {
+                if (isDragMode) {
+                    onMouseUp?.invoke("left")
+                    isDragMode = false
+                }
+                pointers.clear()
+                lastTwoFingerDistance = 0f
+                cancelLongPress()
+                return
+            }
+            "down" -> {
+                cancelLongPress()
+                val newIds = activePointers.map { it.first }.toSet()
+                // 清除已经不存在的指针
+                pointers.keys.removeAll { it !in newIds }
+                // 添加新的指针
+                for ((id, xy) in activePointers) {
+                    if (id !in pointers) {
+                        val (x, y) = xy
+                        val time = System.currentTimeMillis()
+                        pointers[id] = PointerInfo(id, x, y, x, y, x, y, time)
+
+                        if (pointers.size == 1) {
+                            isDragMode = false
+                            longPressSent = false
+                            scheduleLongPress(time, x, y)
+                        }
+                    }
+                }
+                // 记录双指初始距离
+                if (pointers.size == 2) {
+                    val p1 = pointers.values.first()
+                    val p2 = pointers.values.last()
+                    lastTwoFingerDistance = distance(p1.currentX, p1.currentY, p2.currentX, p2.currentY)
+                }
+                if (isDragMode) {
+                    onMouseUp?.invoke("left")
+                    isDragMode = false
+                }
+            }
+            "up" -> {
+                handleComposeUp(activePointers)
+            }
+            else -> { // move
+                // 更新所有指针位置
+                for ((id, xy) in activePointers) {
+                    val (x, y) = xy
+                    val pi = pointers[id] ?: continue
+                    pi.prevX = pi.currentX
+                    pi.prevY = pi.currentY
+                    pi.currentX = x
+                    pi.currentY = y
+                }
+                when (pointers.size) {
+                    1 -> handleSingleFingerMove()
+                    2 -> handleTwoFingerMove()
+                }
+            }
+        }
+    }
+
     private fun handleDown(event: MotionEvent) {
         val idx = event.actionIndex
         val id = event.getPointerId(idx)
@@ -297,6 +370,58 @@ class TouchpadEngine(
         if (distance < 30f) {
             onMouseClick?.invoke("right")
         }
+    }
+
+    /**
+     * Compose 兼容的触控点抬起处理
+     */
+    private fun handleComposeUp(activePointers: List<Pair<Int, Pair<Float, Float>>>) {
+        cancelLongPress()
+
+        // 识别哪些指针抬起了（在 activePointers 中不存在但 pointers 中有）
+        val stillActiveIds = activePointers.map { it.first }.toSet()
+        val liftedIds = pointers.keys.filter { it !in stillActiveIds }
+
+        if (liftedIds.isEmpty()) return
+
+        val prevCount = pointers.size
+
+        for (id in liftedIds) {
+            pointers.remove(id)
+        }
+
+        if (pointers.size == 1 && prevCount > 1) {
+            val remaining = pointers.values.first()
+            remaining.downX = remaining.currentX
+            remaining.downY = remaining.currentY
+        }
+
+        if (pointers.isEmpty()) {
+            lastTwoFingerDistance = 0f
+            // 最后一指抬起 → 判断单击/双击/右键
+            handleComposeSingleFingerUp()
+        }
+    }
+
+    /**
+     * Compose 兼容的单指抬起检测
+     */
+    private fun handleComposeSingleFingerUp() {
+        // 拖拽模式抬起
+        if (isDragMode) {
+            onMouseUp?.invoke("left")
+            isDragMode = false
+            return
+        }
+        if (longPressSent) {
+            onMouseUp?.invoke("left")
+            longPressSent = false
+            return
+        }
+        // We don't have precise x/y/time for the lifted pointer in Compose mode,
+        // so we use a simplified click detection
+        onMouseClick?.invoke("left")
+        lastClickTime = System.currentTimeMillis()
     }
 
     // ── 长按 ──────────────────────────────────────────

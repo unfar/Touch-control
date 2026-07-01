@@ -192,12 +192,47 @@ fun MainApp(
     var scannedBtDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
     var isBtScanning by remember { mutableStateOf(false) }
 
+    // ── 蓝牙扫描逻辑（需要先定义，供 permissionLauncher 调用） ──
+    val scanBluetooth: () -> Unit = remember {
+        {
+            scope.launch {
+                isBtScanning = true
+                scannedBtDevices = emptyList()
+
+                val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
+                if (btAdapter?.isEnabled != true) {
+                    isBtScanning = false
+                    return@launch
+                }
+
+                // Android 12+ 请求 BLUETOOTH_SCAN 权限
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+                        != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        permissionLauncher.launch(arrayOf(
+                            Manifest.permission.BLUETOOTH_SCAN,
+                            Manifest.permission.BLUETOOTH_CONNECT
+                        ))
+                        return@launch
+                    }
+                }
+
+                // 获取已配对设备（不再过滤 LE 类型）
+                scannedBtDevices = withContext(Dispatchers.IO) {
+                    btAdapter.bondedDevices?.toList() ?: emptyList()
+                }
+
+                // 主动扫描发现新设备（结果通过广播异步返回）
+                btAdapter.startDiscovery()
+            }
+        }
+    }
+
     // ── 运行时权限请求 ──
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { _ -> scanBluetooth() }
-
-    // ── 蓝牙发现广播接收器 ──
     val discoveryReceiver = remember {
         object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -234,43 +269,10 @@ fun MainApp(
         }
     }
 
-    fun scanBluetooth() {
-        scope.launch {
-            isBtScanning = true
-            scannedBtDevices = emptyList()
-
-            val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
-            if (btAdapter?.isEnabled != true) {
-                isBtScanning = false
-                return@launch
-            }
-
-            // Android 12+ 请求 BLUETOOTH_SCAN 权限
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
-                    != PackageManager.PERMISSION_GRANTED
-                ) {
-                    permissionLauncher.launch(arrayOf(
-                        Manifest.permission.BLUETOOTH_SCAN,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ))
-                    return@launch
-                }
-            }
-
-            // 获取已配对设备（不再过滤 LE 类型）
-            scannedBtDevices = withContext(Dispatchers.IO) {
-                btAdapter.bondedDevices?.toList() ?: emptyList()
-            }
-
-            // 主动扫描发现新设备（结果通过广播异步返回）
-            btAdapter.startDiscovery()
-        }
-    }
-
-    fun connectBluetooth(device: BluetoothDevice) {
-        scope.launch {
-            bluetoothClient.connect(device)
+    // ── 蓝牙连接 ──
+    val connectBluetooth: (BluetoothDevice) -> Unit = remember {
+        { device: BluetoothDevice ->
+            scope.launch { bluetoothClient.connect(device) }
         }
     }
 

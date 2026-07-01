@@ -49,6 +49,7 @@ class BluetoothServer {
     /** 启动蓝牙服务端监听 */
     fun start(adapter: BluetoothAdapter) {
         stop()
+        adapter.cancelDiscovery()
         _state.value = ServerState.Listening
         Log.i(TAG, "蓝牙服务端启动中...")
 

@@ -244,8 +244,10 @@ fun MainApp(
             btAdapter.startDiscovery()
         }
     }
-
+    // ── 蓝牙连接 ──
     fun connectBluetooth(device: BluetoothDevice) {
+        // 核心修复：连接前取消发现，否则 RFCOMM 连接会被干扰
+        (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter)?.cancelDiscovery()
         scope.launch {
             bluetoothClient.connect(device)
         }

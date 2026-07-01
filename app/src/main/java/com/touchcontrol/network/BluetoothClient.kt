@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.io.OutputStream
 
@@ -42,12 +43,16 @@ class BluetoothClient {
             val sock = device.createRfcommSocketToServiceRecord(
                 BluetoothServer.SERVICE_UUID
             )
-            sock.connect()
+            withTimeout(10_000L) { sock.connect() }
             socket = sock
             outputStream = sock.outputStream
             _state.value = ConnectionState.Connected(device.name ?: "未知设备")
             Log.i(TAG, "蓝牙已连接到: ${device.name}")
             true
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            Log.e(TAG, "蓝牙连接超时 (10s)")
+            _state.value = ConnectionState.Failed("连接超时，请确认平板端已启动服务")
+            false
         } catch (e: IOException) {
             Log.e(TAG, "蓝牙连接失败", e)
             _state.value = ConnectionState.Failed(e.localizedMessage ?: "连接失败")

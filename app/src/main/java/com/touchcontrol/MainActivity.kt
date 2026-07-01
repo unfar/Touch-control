@@ -21,6 +21,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import android.Manifest
+import android.bluetooth.BluetoothAdapter.ACTION_DISCOVERY_FINISHED
+import android.bluetooth.BluetoothDevice.ACTION_FOUND
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.touchcontrol.accessibility.TouchControlService
 import com.touchcontrol.data.SettingsRepository
@@ -123,21 +136,35 @@ fun MainApp(
     // 平板模式（被控端 — 运行蓝牙服务端）
     // ═══════════════════════════════════════════
     if (currentMode == AppMode.TABLET_RECEIVER) {
-        val isServiceRunning = remember {
-            isAccessibilityServiceEnabled(context, TouchControlService::class.java)
+        var isServiceRunning by remember {
+            mutableStateOf(isAccessibilityServiceEnabled(context, TouchControlService::class.java))
+        }
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    isServiceRunning = isAccessibilityServiceEnabled(
+                        context, TouchControlService::class.java
+                    )
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
 
         // 自动启动蓝牙服务端
+        val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
+        val btEnabled = btAdapter?.isEnabled == true
         LaunchedEffect(Unit) {
-            val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
-            if (btAdapter?.isEnabled == true) {
-                bluetoothServer.start(btAdapter)
+            if (btEnabled) {
+                bluetoothServer.start(btAdapter!!)
             }
         }
 
         TabletReceiverScreen(
             bluetoothServer = bluetoothServer,
             isServiceRunning = isServiceRunning,
+            btEnabled = btEnabled,
             onToggleService = {
                 val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 context.startActivity(intent)
@@ -165,17 +192,79 @@ fun MainApp(
     var scannedBtDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
     var isBtScanning by remember { mutableStateOf(false) }
 
+    // ── 运行时权限请求 ──
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ -> scanBluetooth() }
+
+    // ── 蓝牙发现广播接收器 ──
+    val discoveryReceiver = remember {
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    ACTION_FOUND -> {
+                        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                        }
+                        if (device != null) {
+                            scannedBtDevices = (scannedBtDevices + device).distinctBy { it.address }
+                        }
+                    }
+                    ACTION_DISCOVERY_FINISHED -> {
+                        isBtScanning = false
+                    }
+                }
+            }
+        }
+    }
+
+    // 注册/注销广播
+    DisposableEffect(Unit) {
+        val filter = IntentFilter().apply {
+            addAction(ACTION_FOUND)
+            addAction(ACTION_DISCOVERY_FINISHED)
+        }
+        context.registerReceiver(discoveryReceiver, filter)
+        onDispose {
+            context.unregisterReceiver(discoveryReceiver)
+            (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter)?.cancelDiscovery()
+        }
+    }
+
     fun scanBluetooth() {
         scope.launch {
             isBtScanning = true
-            scannedBtDevices = withContext(Dispatchers.IO) {
-                val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
-                if (btAdapter?.isEnabled == true) {
-                    btAdapter.bondedDevices?.filter { it.type != BluetoothDevice.DEVICE_TYPE_LE }?.toList()
-                        ?: emptyList()
-                } else emptyList()
+            scannedBtDevices = emptyList()
+
+            val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
+            if (btAdapter?.isEnabled != true) {
+                isBtScanning = false
+                return@launch
             }
-            isBtScanning = false
+
+            // Android 12+ 请求 BLUETOOTH_SCAN 权限
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
+                    permissionLauncher.launch(arrayOf(
+                        Manifest.permission.BLUETOOTH_SCAN,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ))
+                    return@launch
+                }
+            }
+
+            // 获取已配对设备（不再过滤 LE 类型）
+            scannedBtDevices = withContext(Dispatchers.IO) {
+                btAdapter.bondedDevices?.toList() ?: emptyList()
+            }
+
+            // 主动扫描发现新设备（结果通过广播异步返回）
+            btAdapter.startDiscovery()
         }
     }
 

@@ -27,6 +27,7 @@ import com.touchcontrol.network.BluetoothServer
 fun TabletReceiverScreen(
     bluetoothServer: BluetoothServer,
     isServiceRunning: Boolean,
+    btEnabled: Boolean,
     onToggleService: () -> Unit,
     onSwitchMode: () -> Unit,
 ) {
@@ -87,6 +88,63 @@ fun TabletReceiverScreen(
                         Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("前往设置开启", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+
+        // ── 🔵 蓝牙未开启 → 提示 ──
+        if (!btEnabled) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF1A365D).copy(alpha = 0.9f)
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.BluetoothDisabled,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            "蓝牙未开启",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Text(
+                        "平板模式需要蓝牙服务端运行，请在系统设置中开启蓝牙。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.9f),
+                    )
+                    Button(
+                        onClick = {
+                            context.startActivity(
+                                Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF1A365D)
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.Bluetooth, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("前往开启蓝牙", fontWeight = FontWeight.Bold)
                     }
                 }
             }

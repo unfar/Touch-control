@@ -4,7 +4,7 @@
 
 ## 📱 ↔ 📟 跨设备触控神器
 
-**一个 App，两种模式 — 手机当触摸板 + 键盘，平板当被控端**
+**一个 App，两种模式 — 手机当触摸板，平板当被控端**
 
 [![Build](https://github.com/unfar/Touch-control/actions/workflows/build.yml/badge.svg)](https://github.com/unfar/Touch-control/actions/workflows/build.yml)
 [![Platform](https://img.shields.io/badge/Android-14%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
@@ -18,7 +18,7 @@
 
 ## 🌟 项目简介
 
-TouchControl 是一个**纯 Android 端**的跨设备触控方案。安装一个 App，在手机上它是**触摸板 + 键盘控制器**，在平板上它是**被控接收端**，通过 **蓝牙 RFCOMM** 或 **WiFi WebSocket** 实现安全连接。
+TouchControl 是一个**纯 Android 端**的跨设备触控方案。安装一个 App，在手机上它是**触摸板控制器**，在平板上它是**被控接收端**，通过 **蓝牙 RFCOMM** 实现安全连接。
 
 > 💡 灵感：当你的 Android 平板没有键盘鼠标时，用手机代替触摸板来操作它。
 
@@ -27,26 +27,26 @@ TouchControl 是一个**纯 Android 端**的跨设备触控方案。安装一个
 ## 🎯 核心架构
 
 ```
-┌─────────────────────────────┐     Bluetooth RFCOMM / WiFi     ┌─────────────────────────────┐
-│         📱 手机模式           │                                  │         📟 平板模式           │
-│         (控制器)             │ ◄────── JSON 协议 ──────────► │         (被控端)             │
-│                              │                                  │                              │
-│  ┌───────────────────────┐   │   {"type":"mouse",               │  ┌───────────────────────┐  │
-│  │   触摸板状态机引擎       │   │    "action":"move",            │  │  蓝牙服务端 / WebSocket │  │
-│  │   • TRACKING → MOVING  │   │    "dx":0.05, "dy":0.02}      │  │  (手机直连平板)        │  │
-│  │   • 指针加速曲线       │   │                                  │  └───────────┬───────────┘  │
-│  │   • 长按→拖拽(400ms)  │   │                                  │              ▼              │
-│  │   • 双指滚动/右键     │   │                                  │  ┌───────────────────────┐  │
-│  ├───────────────────────┤   │                                  │  │  AccessibilityService  │  │
-│  │   QWERTY 键盘         │   │                                  │  │  dispatchGesture()    │  │
-│  │   修饰键 Ctrl/Alt/Shift│   │                                  │  │  → 模拟真实触摸/手势   │  │
-│  ├───────────────────────┤   │                                  │  └───────────────────────┘  │
-│  │   蓝牙自动连接        │   │                                  │  ┌───────────────────────┐  │
-│  │   设备搜索/配对      │   │                                  │  │  🖱 光标覆盖层         │  │
-│  └───────────────────────┘   │                                  │  │  CursorOverlayManager │  │
-│                              │                                  │  │  cursor_17.png 箭头  │  │
-│                              │                                  │  └───────────────────────┘  │
-└─────────────────────────────┘                                  └─────────────────────────────┘
+┌─────────────────────────────┐     Bluetooth RFCOMM     ┌─────────────────────────────┐
+│         📱 手机模式           │                            │         📟 平板模式           │
+│         (控制器)             │ ◄────── JSON 协议 ──────► │         (被控端)             │
+│                              │                            │                              │
+│  ┌───────────────────────┐   │  {"type":"mouse",           │  ┌───────────────────────┐  │
+│  │   触摸板状态机引擎       │   │   "action":"move",        │  │  蓝牙服务端            │  │
+│  │   • TRACKING → MOVING  │   │   "dx":0.05, "dy":0.02}  │  │  (平板接收手机指令)   │  │
+│  │   • 指针加速曲线       │   │                            │  └───────────┬───────────┘  │
+│  │   • 长按→拖拽(400ms)  │   │                            │              ▼              │
+│  │   • 双指滚动/右键     │   │                            │  ┌───────────────────────┐  │
+│  ├───────────────────────┤   │                            │  │  AccessibilityService  │  │
+│  │   蓝牙自动连接        │   │                            │  │  dispatchGesture()    │  │
+│  │   已配对设备快速连    │   │                            │  │  → 模拟真实触摸/手势   │  │
+│  └───────────────────────┘   │                            │  └───────────────────────┘  │
+│                              │                            │  ┌───────────────────────┐  │
+│                              │                            │  │  🖱 光标覆盖层         │  │
+│                              │                            │  │  CursorOverlayManager │  │
+│                              │                            │  │  cursor_17.png 箭头  │  │
+│                              │                            │  └───────────────────────┘  │
+└─────────────────────────────┘                            └─────────────────────────────┘
 ```
 
 ---
@@ -62,8 +62,6 @@ TouchControl 是一个**纯 Android 端**的跨设备触控方案。安装一个
 | 👆 **长按 400ms + 滑动** | 拖拽操作 | 长按触发拖拽模式，再滑动拖移 |
 | ✌️ **双指滑动** | 滚轮滚动 | 平滑滚动，独立滚动加速曲线 |
 | ✌️ **双指轻点** | 右键单击 | 双指抬起触发 |
-| ⌨️ **QWERTY 键盘** | 完整键盘 + Ctrl/Alt/Shift/Win 修饰键 |
-| 📝 **文本发送** | 输入文字一键发送到被控端 |
 | 🌙 **深色/浅色主题** | 自动跟随系统或手动切换 |
 
 ### 📟 平板模式（被控端）
@@ -77,8 +75,7 @@ TouchControl 是一个**纯 Android 端**的跨设备触控方案。安装一个
 | ✌️ **双指滚动** | 平滑滚动模拟 |
 | 👆 **长按右键** | 长按模拟右键菜单 |
 | 📳 **震动反馈** | 点击时平板和手机同时震动确认 |
-| ⌨️ **系统按键** | Home / Back / Recents / 音量 / 粘贴文本 |
-| 📋 **文本粘贴** | 通过剪贴板输入文字 |
+| ⌨️ **系统按键** | Home / Back / Recents / 音量 |
 
 ---
 
@@ -98,20 +95,18 @@ git clone https://github.com/unfar/Touch-control.git
 #### 平板端（被控）
 
 ```
-1. 安装并打开 TouchControl
-2. 选择「📟 平板模式」
-3. 进入 设置 → 无障碍 → TouchControl → 开启服务
-4. 回到 App，打开服务端开关
-5. 显示的配对信息供手机连接
+1. 安装并打开 TouchControl，选择「📟 平板模式」
+2. 进入 设置 → 无障碍 → TouchControl → 开启服务
+3. 回到 App，打开服务端开关
+4. 等待手机连接
 ```
 
 #### 手机端（控制）
 
 ```
-1. 安装并打开 TouchControl
-2. 选择「📱 手机模式」
-3. 搜索并连接平板蓝牙设备
-4. 连接成功 → 滑动触摸板控制平板！
+1. 安装并打开 TouchControl，选择「📱 手机模式」
+2. 搜索并连接平板蓝牙设备
+3. 连接成功 → 滑动触摸板控制平板！
 ```
 
 ---
@@ -122,18 +117,15 @@ git clone https://github.com/unfar/Touch-control.git
 |:---|:---|
 | **语言** | Kotlin 2.0.21 |
 | **UI** | Jetpack Compose + Material 3 (Material You) |
-| **通信** | 蓝牙 RFCOMM + OkHttp WebSocket |
+| **通信** | 蓝牙 RFCOMM |
 | **触摸模拟** | AccessibilityService `dispatchGesture()` |
 | **光标渲染** | `WindowManager.TYPE_ACCESSIBILITY_OVERLAY` + ImageView |
 | **光标图标** | cursor_17.png（黑色箭头，1470×1471 → 密度适配 21dp） |
 | **指针加速** | 自定义加速曲线：`output = input × 1.8 + input^1.6 × 3.5` |
 | **滚动加速** | 独立柔和曲线，线性 + 指数混合 |
-| **手势引擎** | 状态机：IDLE → TRACKING → MOVING/DRAGGING/SCROLLING |
+| **手势引擎** | 状态机：IDLE → TRACKING → DRAGGING / SCROLLING |
 | **指针跟踪** | `mutableMapOf<PointerId, Offset>` 精确跟踪多指 |
 | **震动反馈** | `VibratorManager` / `VibrationEffect`（手机 30ms / 平板 20ms） |
-| **二维码** | ZXing (生成) + ML Kit Barcode Scanning (扫描) |
-| **相机** | CameraX |
-| **存储** | DataStore Preferences |
 | **最低版本** | Android 14 (API 34) |
 | **CI/CD** | GitHub Actions 自动编译 APK |
 
@@ -152,10 +144,7 @@ TouchControl/
 │   │
 │   ├── network/
 │   │   ├── BluetoothClient.kt       # 蓝牙客户端（手机→平板）
-│   │   ├── BluetoothServer.kt       # 蓝牙服务端（平板接收）
-│   │   ├── WebSocketClient.kt       # OkHttp WS 客户端（备选）
-│   │   ├── EmbeddedWebSocketServer.kt # 纯 Kotlin WS 服务端（备选）
-│   │   └── ServerDiscovery.kt       # UDP 局域网发现
+│   │   └── BluetoothServer.kt       # 蓝牙服务端（平板接收）
 │   │
 │   ├── accessibility/
 │   │   ├── TouchControlService.kt   # AccessibilityService 触摸模拟
@@ -177,9 +166,8 @@ TouchControl/
 │       ├── navigation/              # 路由定义
 │       └── screens/
 │           ├── ModeSelectionScreen.kt   # 🏁 角色选择
-│           ├── ConnectionScreen.kt      # 🔗 连接管理 + 扫码
+│           ├── ConnectionScreen.kt      # 🔗 蓝牙连接管理
 │           ├── TouchpadScreen.kt        # 🎯 触摸板主页（状态机引擎）
-│           ├── KeyboardScreen.kt        # ⌨️ 远程键盘
 │           ├── TabletReceiverScreen.kt  # 📟 平板接收页面
 │           └── SettingsScreen.kt        # ⚙️ 设置页面
 │
@@ -194,15 +182,6 @@ TouchControl/
 
 ---
 
-## 🧩 同类项目对比
-
-| 项目 | ⭐ | 特点 | 借鉴点 |
-|:---|:---:|:---|:---:|
-| [scrcpy](https://github.com/Genymobile/scrcpy) | 145k | ADB 投屏控制，桌面端 | 触摸注入架构 |
-| [Barry happy/TContributions](https://github.com/barryhappy/TContributions) | - | AccessibilityService 触摸模拟 | 光标覆盖层实现 |
-
----
-
 ## 🗺️ 开发路线
 
 ### 已完成 ✅
@@ -214,12 +193,9 @@ TouchControl/
 - [x] 长按 400ms → 拖拽模式
 - [x] 双指滑动滚动 + 双指轻触右键
 - [x] 点击震动反馈（手机 + 平板）
-- [x] 手机端完整 QWERTY 键盘
-- [x] TCP / WiFi WebSocket 备选连接
 - [x] GitHub Actions 自动编译
 
 ### 计划中 🚧
-- [ ] 多点触控平板大屏 UI 优化
 - [ ] 横屏适配（手机端平板式布局）
 - [ ] 连接历史记录
 - [ ] 三指手势（返回桌面/切换应用）

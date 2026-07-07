@@ -9,9 +9,36 @@ import kotlinx.serialization.encodeToString
  */
 object GestureProtocol {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    // ── 鼠标指令 ──────────────────────────────────────
+    // ── 触摸指令 ──────────────────────────────────────
+
+    /** 触摸按下（手指放到触摸板上 — 带绝对位置） */
+    @Serializable
+    data class TouchDown(
+        val type: String = "touch",
+        val action: String = "down",
+        val pctX: Float = 0.5f,  // 0.0~1.0
+        val pctY: Float = 0.5f,  // 0.0~1.0
+    )
+
+    /** 触摸抬起（手指离开触摸板） */
+    @Serializable
+    data class TouchUp(
+        val type: String = "touch",
+        val action: String = "up",
+    )
+
+    /** 触摸移动（手指在触摸板上滑动 — 绝对百分比坐标 0.0~1.0） */
+    @Serializable
+    data class TouchMove(
+        val type: String = "touch",
+        val action: String = "move",
+        val pctX: Float,  // 0.0~1.0 触摸板上的百分比位置
+        val pctY: Float,  // 0.0~1.0 触摸板上的百分比位置
+    )
+
+    // ── 鼠标指令（兼容） ──────────────────────────────
 
     /** 鼠标移动（相对位移） */
     @Serializable
@@ -22,6 +49,15 @@ object GestureProtocol {
         val dy: Float,
     )
 
+    /** 光标绝对定位（仅移动覆盖层，不注入触摸） */
+    @Serializable
+    data class CursorAbs(
+        val type: String = "mouse",
+        val action: String = "cursor",
+        val x: Float,  // 0.0~1.0
+        val y: Float,  // 0.0~1.0
+    )
+
     /** 鼠标按键 */
     @Serializable
     data class MouseClick(
@@ -30,7 +66,6 @@ object GestureProtocol {
         val button: String = "left",
     )
 
-    /** 鼠标滚轮 */
     @Serializable
     data class MouseScroll(
         val type: String = "mouse",
@@ -65,7 +100,6 @@ object GestureProtocol {
         val modifiers: List<String> = emptyList(),
     )
 
-    /** 输入一段文本 */
     @Serializable
     data class TypeText(
         val type: String = "key",
@@ -89,5 +123,20 @@ object GestureProtocol {
 
     // ── 序列化 ────────────────────────────────────────
 
-    fun encode(message: Any): String = json.encodeToString(message)
+    fun encode(protocol: Any): String = when (protocol) {
+        is TouchDown -> json.encodeToString(protocol)
+        is TouchUp -> json.encodeToString(protocol)
+        is TouchMove -> json.encodeToString(protocol)
+        is MouseMove -> json.encodeToString(protocol)
+        is CursorAbs -> json.encodeToString(protocol)
+        is MouseClick -> json.encodeToString(protocol)
+        is MouseScroll -> json.encodeToString(protocol)
+        is KeyPress -> json.encodeToString(protocol)
+        is KeyRelease -> json.encodeToString(protocol)
+        is KeyTap -> json.encodeToString(protocol)
+        is TypeText -> json.encodeToString(protocol)
+        is Ping -> json.encodeToString(protocol)
+        is Pong -> json.encodeToString(protocol)
+        else -> throw IllegalArgumentException("未知协议类型: ${protocol::class.simpleName}")
+    }
 }

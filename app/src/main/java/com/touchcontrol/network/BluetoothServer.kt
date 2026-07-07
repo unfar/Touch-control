@@ -102,6 +102,7 @@ class BluetoothServer {
                     for (i in 0 until lines.size - 1) {
                         val msg = lines[i].trim()
                         if (msg.isNotEmpty()) {
+                            Log.i(TAG, "收到指令: $msg")
                             onCommand?.invoke(msg)
                         }
                     }

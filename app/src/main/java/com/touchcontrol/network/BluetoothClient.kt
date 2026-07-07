@@ -66,6 +66,7 @@ class BluetoothClient {
             val data = (json + "\n").toByteArray(Charsets.UTF_8)
             outputStream?.write(data)
             outputStream?.flush()
+            Log.i(TAG, "发送: $json")
         } catch (e: IOException) {
             Log.e(TAG, "蓝牙发送失败", e)
             _state.value = ConnectionState.Failed("发送失败")

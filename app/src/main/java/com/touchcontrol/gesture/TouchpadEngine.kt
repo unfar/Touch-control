@@ -37,6 +37,10 @@ class TouchpadEngine(
     var onGesture: ((gesture: String) -> Unit)? = null
     var onDragStart: (() -> Unit)? = null
     var onDragEnd: (() -> Unit)? = null
+    /** 手指按下触摸板（触摸板模式） */
+    var onTouchDown: (() -> Unit)? = null
+    /** 手指抬起触摸板（触摸板模式） */
+    var onTouchUp: (() -> Unit)? = null
 
     // ── 触摸状态跟踪 ──
     private val pointers = mutableMapOf<Int, PointerInfo>()
@@ -121,6 +125,8 @@ class TouchpadEngine(
                             isDragMode = false
                             longPressSent = false
                             scheduleLongPress(time, x, y)
+                            // 触触摸板模式：手指按下
+                            onTouchDown?.invoke()
                         }
                     }
                 }
@@ -398,6 +404,8 @@ class TouchpadEngine(
 
         if (pointers.isEmpty()) {
             lastTwoFingerDistance = 0f
+            // 手指离开触摸板
+            onTouchUp?.invoke()
             // 最后一指抬起 → 判断单击/双击/右键
             handleComposeSingleFingerUp()
         }

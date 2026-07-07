@@ -31,6 +31,7 @@ import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -63,7 +64,12 @@ class MainActivity : ComponentActivity() {
 
         // 指令路由到无障碍服务
         val commandHandler: (String) -> Unit = { json ->
-            TouchControlService.instance?.executeCommand(json)
+            val service = TouchControlService.instance
+            if (service != null) {
+                service.executeCommand(json)
+            } else {
+                android.util.Log.e("TouchControl", "TouchControlService.instance 为 null，无法执行指令: $json")
+            }
         }
         bluetoothServer.onCommand = commandHandler
 
@@ -99,11 +105,22 @@ data class BottomNavItem(
 // ── 辅助函数 ──
 
 fun isAccessibilityServiceEnabled(context: Context, serviceClass: Class<*>): Boolean {
+    // 方法1: 实例检测（仅对 TouchControlService 有效）
+    if (serviceClass == com.touchcontrol.accessibility.TouchControlService::class.java) {
+        if (com.touchcontrol.accessibility.TouchControlService.instance != null) return true
+    }
+    // 方法2: 从系统设置检测（ColorOS/Android 16 兼容）
+    try {
+        val enabledServices = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        )
+        if (enabledServices?.contains(context.packageName) == true) return true
+    } catch (_: Exception) {}
+    // 方法3: AccessibilityManager API（部分设备可能不返回结果）
     val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-    val enabledServices = am.getEnabledAccessibilityServiceList(
-        AccessibilityServiceInfo.FEEDBACK_GENERIC
-    )
-    return enabledServices.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+    val list = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+    return list.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
 }
 
 @Composable
@@ -153,7 +170,8 @@ fun MainApp(
         }
 
         // 自动启动蓝牙服务端
-        val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
+        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+        val btAdapter = bluetoothManager?.adapter
         val btEnabled = btAdapter?.isEnabled == true
         LaunchedEffect(Unit) {
             if (btEnabled) {
@@ -192,62 +210,52 @@ fun MainApp(
     var scannedBtDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
     var isBtScanning by remember { mutableStateOf(false) }
 
-    // ── 运行时权限请求 ──
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ ->
-        // 权限获取后直接扫描
+    // ── 实际扫描逻辑（权限已确保） ──
+    val doScan: () -> Unit = {
+        android.util.Log.i("TouchControl", ">>> doScan() called")
         scope.launch {
             isBtScanning = true
             scannedBtDevices = emptyList()
-            val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
+            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            val btAdapter = bluetoothManager?.adapter
+            android.util.Log.i("TouchControl", "btManager=$bluetoothManager btAdapter=$btAdapter enabled=${btAdapter?.isEnabled}")
             if (btAdapter?.isEnabled == true) {
-                scannedBtDevices = withContext(Dispatchers.IO) {
+                val bonded = withContext(Dispatchers.IO) {
                     btAdapter.bondedDevices?.toList() ?: emptyList()
                 }
+                android.util.Log.i("TouchControl", "bondedDevices count=${bonded.size}")
+                bonded.forEach { android.util.Log.i("TouchControl", "  bonded: ${it.name} addr=${it.address}") }
+                scannedBtDevices = bonded
+                android.util.Log.i("TouchControl", "calling startDiscovery()")
                 btAdapter.startDiscovery()
             } else {
+                android.util.Log.i("TouchControl", "BT not enabled!")
                 isBtScanning = false
             }
         }
     }
 
-    // ── 扫描入口（先检查权限，需要则发起请求） ──
-    val scanBluetooth: () -> Unit = {
-        scope.launch {
-            isBtScanning = true
-            scannedBtDevices = emptyList()
+    // ── 运行时权限请求 ──
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val allGranted = results.entries.all { it.value }
+        if (allGranted) {
+            showBtScan = true
+            doScan()
+        }
+    }
 
-            val btAdapter = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter
-            if (btAdapter?.isEnabled != true) {
-                isBtScanning = false
-                return@launch
-            }
-
-            // Android 12+ 请求 BLUETOOTH_SCAN 权限
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
-                    != PackageManager.PERMISSION_GRANTED
-                ) {
-                    permissionLauncher.launch(arrayOf(
-                        Manifest.permission.BLUETOOTH_SCAN,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ))
-                    return@launch
-                }
-            }
-
-            // 已配对的 + 主动发现
-            scannedBtDevices = withContext(Dispatchers.IO) {
-                btAdapter.bondedDevices?.toList() ?: emptyList()
-            }
-            btAdapter.startDiscovery()
+    // 进入蓝牙列表时自动扫描
+    LaunchedEffect(showBtScan) {
+        if (showBtScan) {
+            doScan()
         }
     }
     // ── 蓝牙连接 ──
     fun connectBluetooth(device: BluetoothDevice) {
-        // 核心修复：连接前取消发现，否则 RFCOMM 连接会被干扰
-        (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter)?.cancelDiscovery()
+        val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+        mgr?.adapter?.cancelDiscovery()
         scope.launch {
             bluetoothClient.connect(device)
         }
@@ -286,12 +294,44 @@ fun MainApp(
         context.registerReceiver(discoveryReceiver, filter)
         onDispose {
             context.unregisterReceiver(discoveryReceiver)
-            (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothAdapter)?.cancelDiscovery()
+            val mgr = context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+            mgr?.adapter?.cancelDiscovery()
+        }
+    }
+
+    // 防误退：再按一次退出
+    var backPressCount by remember { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 蓝牙连接成功后自动返回触摸板
+    LaunchedEffect(btState) {
+        if (btState is BluetoothClient.ConnectionState.Connected) {
+            showBtScan = false
+        }
+    }
+
+    LaunchedEffect(backPressCount) {
+        if (backPressCount > 0) {
+            snackbarHostState.showSnackbar(
+                message = "再按一次退出 TouchControl",
+                duration = SnackbarDuration.Short,
+            )
+            kotlinx.coroutines.delay(2000)
+            backPressCount = 0
+        }
+    }
+
+    BackHandler {
+        if (backPressCount == 0) {
+            backPressCount = 1
+        } else {
+            context.run { (this as? android.app.Activity)?.finish() }
         }
     }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             AnimatedVisibility(
                 visible = !showBtScan,
@@ -304,7 +344,6 @@ fun MainApp(
                 ) {
                     listOf(
                         BottomNavItem(Screen.Touchpad, Icons.Filled.TouchApp, "触摸板"),
-                        BottomNavItem(Screen.Keyboard, Icons.Filled.Keyboard, "键盘"),
                         BottomNavItem(Screen.Settings, Icons.Filled.Settings, "设置"),
                     ).forEach { item ->
                         NavigationBarItem(
@@ -325,7 +364,7 @@ fun MainApp(
                     btState = btState,
                     scannedDevices = scannedBtDevices,
                     isScanning = isBtScanning,
-                    onScan = { scanBluetooth() },
+                    onScan = { doScan() },
                     onConnect = { device -> connectBluetooth(device) },
                     onDisconnect = { bluetoothClient.disconnect() },
                     onBack = { showBtScan = false },
@@ -350,7 +389,22 @@ fun MainApp(
                                 }
                                 true
                             },
-                            onNavigateToConnection = { showBtScan = true },
+                            onNavigateToConnection = {
+                                val hasPerms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED &&
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                } else true
+                                if (!hasPerms) {
+                                    permissionLauncher.launch(arrayOf(
+                                        Manifest.permission.BLUETOOTH_SCAN,
+                                        Manifest.permission.BLUETOOTH_CONNECT,
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                    ))
+                                } else {
+                                    showBtScan = true
+                                }
+                            },
                         )
                     }
                     Screen.Keyboard -> {
@@ -372,7 +426,6 @@ fun MainApp(
                             },
                         )
                     }
-                    else -> {}
                 }
             }
         }
